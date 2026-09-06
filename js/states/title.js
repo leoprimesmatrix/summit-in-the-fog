@@ -68,7 +68,7 @@
       gustT -= dt;
       if (gustT <= 0) {
         gustP = 0;
-        if (phase === 1) Aud.play('sfx_gust', { volume: 0.3 });
+        if (phase === 1) Aud.play('sfx_gust', { volume: 0.15 });
         Part.gustBoost = GUST_DUR;
         for (var i = 0; i < 26; i++) {
           Part.spawn('streak', -30 - Math.random() * 60, 24 + Math.random() * 140, {
