@@ -15,21 +15,26 @@
   var R = {};
 
   var TILE_H = 240;          // 8 rows
-  var LEFT_MID = 60, RIGHT_MID = 516;
-  var EDGE_AMP = [20, 10, 5];
+  // The buttress is narrower than the frame on purpose: the painted range is
+  // the mountain, and this is one rib of it, so the view past both shoulders
+  // has to stay open or the scenery is replaced by a wall.
+  var LEFT_MID = 112, RIGHT_MID = 464;
+  var EDGE_AMP = [16, 9, 4];
   var EDGE_K = [1, 3, 7];    // whole periods across the tile: it wraps
-  var FRINGE = 9;            // pixels of haze at each silhouette edge
+  var FRINGE = 14;           // pixels of haze at each silhouette edge
 
   // rock: [shadow, body, light], grain, snow/rime, how much rime, and how far
   // the whole face is pushed back into the atmosphere. The recede value is
   // what keeps the wall behind the route instead of competing with it: the
   // ledges you can stand on must always be the brightest thing on the rock.
+  // Taken toward the colours of the painted range so the rib belongs to the
+  // same mountain, with real snow on it rather than a dark slab.
   var PAL = [
-    { d: '#3e4437', b: '#525845', l: '#666b53', g: '#2f3429', s: '#cfd8dc', rime: 0.18, recede: 0.34 },
-    { d: '#443c30', b: '#574c3c', l: '#6b5e4a', g: '#332d24', s: '#d6dee2', rime: 0.26, recede: 0.36 },
-    { d: '#3c4c5c', b: '#4b5e72', l: '#5d7488', g: '#2d3a47', s: '#e4eef5', rime: 0.52, recede: 0.30 },
-    { d: '#313640', b: '#3d4450', l: '#4c5462', g: '#252932', s: '#dbe6ef', rime: 0.44, recede: 0.26 },
-    { d: '#1f222a', b: '#282c36', l: '#343945', g: '#171920', s: '#e8f1f8', rime: 0.62, recede: 0.22 }
+    { d: '#5c6450', b: '#78805f', l: '#93996f', g: '#464d3b', s: '#e8f0f4', rime: 0.42, recede: 0.16 },
+    { d: '#6b5f4c', b: '#8b7a60', l: '#a89474', g: '#4d4436', s: '#eef4f8', rime: 0.50, recede: 0.16 },
+    { d: '#6a8296', b: '#88a1b6', l: '#a6bfd2', g: '#4e6376', s: '#f4fbff', rime: 0.72, recede: 0.14 },
+    { d: '#5a6270', b: '#737c8c', l: '#8e97a6', g: '#424956', s: '#e9f1f8', rime: 0.62, recede: 0.14 },
+    { d: '#464f5e', b: '#5c6675', l: '#77818f', g: '#333a46', s: '#f2f8ff', rime: 0.78, recede: 0.12 }
   ];
 
   var tiles = null;          // tiles[stage] = [canvasA, canvasB]
@@ -108,14 +113,22 @@
         else if (v < 0.62) { r = cb[0]; g = cb[1]; b = cb[2]; }
         else { r = cl[0]; g = cl[1]; b = cl[2]; }
 
-        // Snow and rime lie in patches on the up-facing side of a bed, not
-        // along every one of them: a big soft mask decides where drifts form.
+        // Snow lies in drifts on the up-facing side of a bed, thick enough to
+        // read as an alpine face rather than bare rock, but clumped by a big
+        // soft mask so it never stripes every bed the same way.
         if (strata > 0.972) { r = cg[0]; g = cg[1]; b = cg[2]; }
-        else if (strata > 0.70 && strata < 0.94) {
-          var clump = Math.sin(x * 0.008 + 3 * YW * y + vp) * 0.55 +
-                      Math.sin(x * 0.023 + 7 * YW * y) * 0.45;
-          if (clump > 0.42 && hash2(x + 7, y + 3) < p.rime) {
-            var mixA = 0.45 + hash2(x, y + 11) * 0.4;
+        else if (strata > 0.52 && strata < 0.96) {
+          // Low frequencies only: a drift runs the width of the buttress and
+          // thins away, so it never reads as a ledge-sized bar of white the
+          // player might try to stand on.
+          var clump = Math.sin(x * 0.0042 + 3 * YW * y + vp) * 0.6 +
+                      Math.sin(x * 0.0095 + 7 * YW * y) * 0.4;
+          if (clump > 0.10 && hash2(x + 7, y + 3) < p.rime) {
+            // Deepest where the bed is flattest, thinning to nothing at the
+            // edges of the drift.
+            var depth = U.clamp((strata - 0.52) / 0.30, 0, 1);
+            var mixA = (0.22 + hash2(x, y + 11) * 0.28 + depth * 0.38) *
+                       U.clamp((clump - 0.10) / 0.5, 0, 1);
             r = Math.round(r + (cs[0] - r) * mixA);
             g = Math.round(g + (cs[1] - g) * mixA);
             b = Math.round(b + (cs[2] - b) * mixA);

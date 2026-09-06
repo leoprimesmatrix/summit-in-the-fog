@@ -8,7 +8,7 @@ SITF.Config = {
   W: 576, H: 324,
   // Five lanes across the face. The band spans x 100..476 with the 40px
   // ledges, which leaves the vista visible down both edges of the frame.
-  LANE_X: [120, 204, 288, 372, 456],
+  LANE_X: [152, 220, 288, 356, 424],
   MAX_HOP: 2,               // lanes a single hop can cross
   ROW_H: 30,
   ROWS: 180,
@@ -37,11 +37,11 @@ SITF.Config = {
   // stormCalm/Build/Dur are the weather cycle in seconds; `wind` means a
   // storm shoves each hop a lane downwind; `breath` means thin air.
   ZONES: [
-    { name: 'BASE CAMP',  from: 0,   to: 19,  fogDensity: 0.90,  gustInterval: 4.0, revealRows: 9, whiteoutSpeed: 0.40, crumbleChance: 0.00, mercyChance: 0.30, forkChance: 0.30, leapChance: 0.10, gustDelay: 0, crystalChance: 0.10, stormCalm: 999, stormBuild: 6, stormDur: 0,  wind: false, breath: false },
-    { name: 'TREELINE',   from: 20,  to: 59,  fogDensity: 0.955, gustInterval: 4.5, revealRows: 7, whiteoutSpeed: 0.62, crumbleChance: 0.06, mercyChance: 0.22, forkChance: 0.32, leapChance: 0.18, gustDelay: 0, crystalChance: 0.14, stormCalm: 26,  stormBuild: 6, stormDur: 10, wind: false, breath: false },
-    { name: 'THE GLACIER',from: 60,  to: 99,  fogDensity: 0.965, gustInterval: 5.5, revealRows: 6, whiteoutSpeed: 0.72, crumbleChance: 0.14, mercyChance: 0.14, forkChance: 0.30, leapChance: 0.26, gustDelay: 0, crystalChance: 0.16, bridgeChance: 0.34, stormCalm: 23,  stormBuild: 6, stormDur: 12, wind: false, breath: false },
-    { name: 'THE RIDGE',  from: 100, to: 139, fogDensity: 0.975, gustInterval: 6.5, revealRows: 5, whiteoutSpeed: 0.82, crumbleChance: 0.20, mercyChance: 0.08, forkChance: 0.26, leapChance: 0.30, gustDelay: 0, crystalChance: 0.18, bridgeChance: 0.22, stormCalm: 21,  stormBuild: 6, stormDur: 13, wind: true,  breath: false },
-    { name: 'DEATH ZONE', from: 140, to: 180, fogDensity: 0.985, gustInterval: 8.0, revealRows: 3, whiteoutSpeed: 0.94, crumbleChance: 0.28, mercyChance: 0.00, forkChance: 0.20, leapChance: 0.34, gustDelay: 1.0, crystalChance: 0.22, bridgeChance: 0.16, stormCalm: 19,  stormBuild: 6, stormDur: 14, wind: true,  breath: true }
+    { name: 'BASE CAMP',  from: 0,   to: 19,  fogDensity: 0.78,  gustInterval: 4.0, revealRows: 9, whiteoutSpeed: 0.40, crumbleChance: 0.00, mercyChance: 0.30, forkChance: 0.30, leapChance: 0.10, gustDelay: 0, crystalChance: 0.10, stormCalm: 999, stormBuild: 6, stormDur: 0,  wind: false, breath: false },
+    { name: 'TREELINE',   from: 20,  to: 59,  fogDensity: 0.82, gustInterval: 4.5, revealRows: 7, whiteoutSpeed: 0.62, crumbleChance: 0.06, mercyChance: 0.22, forkChance: 0.32, leapChance: 0.18, gustDelay: 0, crystalChance: 0.14, stormCalm: 26,  stormBuild: 6, stormDur: 10, wind: false, breath: false },
+    { name: 'THE GLACIER',from: 60,  to: 99,  fogDensity: 0.85, gustInterval: 5.5, revealRows: 6, whiteoutSpeed: 0.72, crumbleChance: 0.14, mercyChance: 0.14, forkChance: 0.30, leapChance: 0.26, gustDelay: 0, crystalChance: 0.16, bridgeChance: 0.34, stormCalm: 23,  stormBuild: 6, stormDur: 12, wind: false, breath: false },
+    { name: 'THE RIDGE',  from: 100, to: 139, fogDensity: 0.87, gustInterval: 6.5, revealRows: 5, whiteoutSpeed: 0.82, crumbleChance: 0.20, mercyChance: 0.08, forkChance: 0.26, leapChance: 0.30, gustDelay: 0, crystalChance: 0.18, bridgeChance: 0.22, stormCalm: 21,  stormBuild: 6, stormDur: 13, wind: true,  breath: false },
+    { name: 'DEATH ZONE', from: 140, to: 180, fogDensity: 0.89, gustInterval: 8.0, revealRows: 3, whiteoutSpeed: 0.94, crumbleChance: 0.28, mercyChance: 0.00, forkChance: 0.20, leapChance: 0.34, gustDelay: 1.0, crystalChance: 0.22, bridgeChance: 0.16, stormCalm: 19,  stormBuild: 6, stormDur: 14, wind: true,  breath: true }
   ],
 
   // Weather and thin air.
