@@ -5,14 +5,14 @@
 
   // The face you are actually climbing.
   //
-  // This answers a real question: if the ledges hang in front of the painted
-  // range you are climbing thin air, but if a wall is drawn over the range
-  // then the mountain is gone. So the wall is cut out of the range itself -
-  // horizontal bands of the nature_3 peak at 1:1 pixel scale, stacked into a
-  // buttress that stands in front of the same mountain seen at distance. The
-  // rock you hold is the rock on the horizon: same palette, same brush, same
-  // mountain. The rib is narrow enough that the peak stays visible past both
-  // of its shoulders, so you can always see what you are on.
+  // If the ledges hang in front of the painted range you are climbing thin
+  // air, but a wall drawn over the range hides the mountain. So a narrow rib
+  // stands in front of the range, and the range stays visible past both of
+  // its shoulders. The rib is painted here, in the exact colours of the
+  // nature_3 peak (sampled from the PNG offline), so it is the same stone as
+  // the mountain behind it - but it is painted as CLIFF, not cut out of the
+  // picture of the peak. Stacking slices of the painting produced a wall of
+  // small repeating mountains with a strip of sky through each join.
   //
   // Each stage tints that stone toward its own light, so the higher you climb
   // the colder it gets without ever becoming a different mountain.
@@ -20,38 +20,33 @@
   var R = {};
 
   var TILE_H = 240;          // 8 rows
-  var LEFT_MID = 122, RIGHT_MID = 454;
-  var EDGE_AMP = [17, 10, 5];
+  var LEFT_MID = 130, RIGHT_MID = 446;
+  var EDGE_AMP = [13, 8, 4];
   var EDGE_K = [1, 3, 7];    // whole periods across the tile: it wraps
   var FRINGE = 16;           // pixels of haze at each silhouette edge
-  var FADE = 14;             // cross-fade between stacked bands
 
-  // Bands taken from the cliff-and-ledge middle of the painted peak, clear of
-  // the summit cone and the forest at its foot, so a tile reads as rock and
-  // never as a small picture of a mountain repeating.
-  // Taken from the snow-and-rock upper third of the peak, not its middle:
-  // the mountain's green terraces are the same shape and size as the ledge
-  // sprites, and a wall built out of them is unreadable - you cannot tell
-  // what you can stand on. Up here it is all cliff band, snow and stone.
-  var BANDS = [
-    [{ sy: 88, h: 86 }, { sy: 60, h: 80 }, { sy: 118, h: 74 }],
-    [{ sy: 104, h: 82 }, { sy: 68, h: 84 }, { sy: 134, h: 74 }]
+  // The peak's own palette, most-common-first from its cliff band.
+  var ROCK = [
+    [0x40, 0x58, 0x90],      // deep shadow
+    [0x50, 0x68, 0x90],      // shadow
+    [0x90, 0x80, 0x78],      // dark stone
+    [0x98, 0x90, 0x90],      // stone
+    [0xc8, 0xa0, 0x88],      // lit stone
+    [0xe8, 0xc0, 0xa0]       // highlight
   ];
+  var SNOW = [[0xe8, 0xe8, 0xe8], [0xf8, 0xf8, 0xf0]];
+  var GREEN = [[0x40, 0x50, 0x20], [0x50, 0x60, 0x20], [0x60, 0x68, 0x20]];
 
   // Per-stage light on the same stone, and how far back in the air it sits.
-  // Receding is what keeps the ledges the brightest thing on the wall.
-  // The rib has to stand apart from whatever is behind it or it dissolves and
-  // the ledges are floating again - but which way depends on the light. Low
-  // down, against a bright sky and green hills, that means a touch darker.
   // Under the aurora the distant peaks are already near-black, so a face a
   // few metres from your nose is the BRIGHTEST thing in frame: thick rime
   // catching the sky. Darkening it there made it vanish into the night.
   var PAL = [
-    { tint: '#8fa06a', tintA: 0.12, recede: 0.10, snow: 0.12 },
-    { tint: '#d0a878', tintA: 0.08, recede: 0.14, snow: 0.22 },
-    { tint: '#8fb8dc', tintA: 0.32, recede: 0.22, snow: 0.60 },
-    { tint: '#9fb0d8', tintA: 0.34, recede: 0.20, snow: 0.64 },
-    { tint: '#b9d2ee', tintA: 0.42, recede: 0.06, snow: 0.88 }
+    { tint: '#8fa06a', tintA: 0.12, recede: 0.10, snow: 0.06, green: 0.55 },
+    { tint: '#d0a878', tintA: 0.08, recede: 0.14, snow: 0.18, green: 0.25 },
+    { tint: '#8fb8dc', tintA: 0.32, recede: 0.22, snow: 0.50, green: 0 },
+    { tint: '#9fb0d8', tintA: 0.34, recede: 0.20, snow: 0.58, green: 0 },
+    { tint: '#b9d2ee', tintA: 0.42, recede: 0.06, snow: 0.85, green: 0 }
   ];
 
   var tiles = null;          // tiles[stage] = [canvasA, canvasB]
@@ -96,56 +91,116 @@
     return cv;
   }
 
-  // One band of source rock, its top edge cross-faded into whatever is
-  // already there through a gradient mask. Averaging two copies of the whole
-  // tile (the usual seamless-tile fold) greyed the art into mud and threw
-  // away the thing that made it worth using; this keeps every band crisp and
-  // only softens the joins.
-  function blitBand(dst, src, sy, dy, h, fade) {
-    var t = U.makeCanvas(C.W, h + fade);
-    var tc = t.getContext('2d');
-    tc.imageSmoothingEnabled = false;
-    tc.drawImage(src, 0, sy - fade, C.W, h + fade, 0, 0, C.W, h + fade);
-    if (fade > 0) {
-      // One pass, covering the whole canvas. destination-in clears every
-      // pixel the source does not cover, so masking the top strip and then
-      // the body in two fills wipes out whichever was kept first - which is
-      // exactly how this silently baked a set of entirely empty tiles.
-      tc.globalCompositeOperation = 'destination-in';
-      var g = tc.createLinearGradient(0, 0, 0, h + fade);
-      g.addColorStop(0, 'rgba(0,0,0,0)');
-      g.addColorStop(fade / (h + fade), 'rgba(0,0,0,1)');
-      g.addColorStop(1, 'rgba(0,0,0,1)');
-      tc.fillStyle = g;
-      tc.fillRect(0, 0, C.W, h + fade);
-    }
-    dst.drawImage(t, 0, dy - fade);
+  // Value noise on a grid whose row count divides the tile height, so every
+  // octave wraps top-to-bottom and the stacked tiles never show a join.
+  function hash(ix, iy, seed) {
+    var n = Math.imul(ix, 374761393) + Math.imul(iy, 668265263) + Math.imul(seed, 1013904223);
+    n = Math.imul(n ^ (n >>> 13), 1274126177);
+    n = n ^ (n >>> 16);
+    return (n >>> 0) / 4294967296;
+  }
+  function vnoise(x, y, cw, ch, seed) {
+    var rows = Math.round(TILE_H / ch);
+    var gx = x / cw, gy = y / ch;
+    var ix = Math.floor(gx), iy = Math.floor(gy);
+    var fx = gx - ix, fy = gy - iy;
+    fx = fx * fx * (3 - 2 * fx);
+    fy = fy * fy * (3 - 2 * fy);
+    var y0 = ((iy % rows) + rows) % rows, y1 = (y0 + 1) % rows;
+    var a = hash(ix, y0, seed), b = hash(ix + 1, y0, seed);
+    var c = hash(ix, y1, seed), d = hash(ix + 1, y1, seed);
+    return (a + (b - a) * fx) * (1 - fy) + (c + (d - c) * fx) * fy;
   }
 
-  function paintRock(cx, src, variant) {
-    var set = BANDS[variant % BANDS.length];
-    var y = 0;
-    for (var i = 0; i < set.length && y < TILE_H; i++) {
-      var b = set[i];
-      var h = Math.min(b.h, TILE_H - y);
-      blitBand(cx, src, b.sy, y, h, i === 0 ? 0 : FADE);
-      y += h;
-    }
-    if (y < TILE_H) blitBand(cx, src, set[0].sy, y, TILE_H - y, FADE);
+  // The wall is quilted out of the peak's own brushwork. These are 20x20
+  // squares of nature_3/2.png that hold nothing but rock and snow - found
+  // by scanning the PNG offline for blocks with no sky, no forest and no
+  // transparency. Laid down small, overlapping, feathered and randomly
+  // mirrored, they give a face in exactly the painting's hand with none of
+  // its shapes: no summit cone, no strip of sky, nothing that repeats at a
+  // size the eye can catch.
+  var PATCH = 20;
+  var SRC = [
+    [272,64],[272,72],[280,72],[272,80],[280,80],[272,88],
+    [280,88],[288,88],[264,96],[304,96],[312,96],[320,96],
+    [328,96],[256,104],[264,104],[304,104],[312,104],[320,104],
+    [328,104],[248,112],[256,112],[264,112],[312,112],[320,112],
+    [328,112],[248,120],[256,120],[336,120],[336,128],[344,128],
+    [144,152],[152,152],[152,160],[424,160],[432,160],[448,168],
+    [456,168],[200,192],[288,208],[280,216],[288,216],[296,216]];
+  var SNOWY = [0, 2, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 18, 20, 21, 22, 26];       // the blocks up by the snowline
 
-    // Make the tile wrap: its last rows melt back into its first.
-    var cv = cx.canvas;
-    var tail = U.makeCanvas(C.W, FADE * 2);
-    var tx = tail.getContext('2d');
-    tx.imageSmoothingEnabled = false;
-    tx.drawImage(cv, 0, 0, C.W, FADE * 2, 0, 0, C.W, FADE * 2);
-    tx.globalCompositeOperation = 'destination-in';
-    var g2 = tx.createLinearGradient(0, 0, 0, FADE * 2);
-    g2.addColorStop(0, 'rgba(0,0,0,1)');
-    g2.addColorStop(1, 'rgba(0,0,0,0)');
-    tx.fillStyle = g2;
-    tx.fillRect(0, 0, C.W, FADE * 2);
-    cx.drawImage(tail, 0, TILE_H - FADE * 2);
+  var patchCv = null, patchMask = null;
+  function patch(src, i, flip) {
+    if (!patchCv) {
+      patchCv = U.makeCanvas(PATCH, PATCH);
+      patchMask = U.makeCanvas(PATCH, PATCH);
+      var mc = patchMask.getContext('2d');
+      var g = mc.createRadialGradient(PATCH / 2, PATCH / 2, 4, PATCH / 2, PATCH / 2, PATCH / 2);
+      g.addColorStop(0, 'rgba(0,0,0,1)');
+      g.addColorStop(0.72, 'rgba(0,0,0,0.9)');
+      g.addColorStop(1, 'rgba(0,0,0,0)');
+      mc.fillStyle = g;
+      mc.fillRect(0, 0, PATCH, PATCH);
+    }
+    var pc = patchCv.getContext('2d');
+    pc.imageSmoothingEnabled = false;
+    pc.globalCompositeOperation = 'source-over';
+    pc.clearRect(0, 0, PATCH, PATCH);
+    pc.save();
+    if (flip) { pc.translate(PATCH, 0); pc.scale(-1, 1); }
+    pc.drawImage(src, SRC[i][0], SRC[i][1], PATCH, PATCH, 0, 0, PATCH, PATCH);
+    pc.restore();
+    pc.globalCompositeOperation = 'destination-in';
+    pc.drawImage(patchMask, 0, 0);
+    return patchCv;
+  }
+
+  function paintRock(cx, src, stage, variant) {
+    var p = PAL[stage];
+    var rnd = U.mulberry32(3100 + variant * 977);
+    var x0 = LEFT_MID - EDGE_AMP[0] - EDGE_AMP[1] - EDGE_AMP[2] - FRINGE - 4;
+    var x1 = RIGHT_MID + EDGE_AMP[0] + EDGE_AMP[1] + EDGE_AMP[2] + FRINGE + 4;
+
+    // Two passes, so no patch edge is ever the last thing drawn everywhere.
+    for (var pass = 0; pass < 2; pass++) {
+      var step = pass === 0 ? 9 : 14;
+      for (var gy = 0; gy < TILE_H; gy += step) {
+        for (var gx = x0 - PATCH / 2; gx < x1; gx += step) {
+          if (pass === 1 && rnd() < 0.55) continue;
+          var i = Math.floor(rnd() * SRC.length);
+          if (rnd() < p.snow * 0.6) i = SNOWY[Math.floor(rnd() * SNOWY.length)];
+          var px = Math.round(gx + (rnd() - 0.5) * step);
+          var py = Math.round(gy + (rnd() - 0.5) * step);
+          var cv = patch(src, i, rnd() < 0.5);
+          // Drawn three times so the tile wraps: a patch that hangs off the
+          // bottom reappears at the top of the next tile down.
+          cx.drawImage(cv, px, py - PATCH / 2);
+          cx.drawImage(cv, px, py - PATCH / 2 - TILE_H);
+          cx.drawImage(cv, px, py - PATCH / 2 + TILE_H);
+        }
+      }
+    }
+
+    // Big soft light and shadow across the face - the mass of a buttress
+    // rather than a flat sheet of texture. Quantised into steps so it stays
+    // in the painting's flat-facet language.
+    var seed = 91 + variant * 17;
+    var id = cx.createImageData(C.W, TILE_H);
+    var d = id.data;
+    for (var y = 0; y < TILE_H; y++) {
+      for (var x = x0; x < x1; x++) {
+        var m = vnoise(x, y, 64, 40, seed) * 0.7 + vnoise(x, y, 22, 20, seed + 1) * 0.3;
+        var o = (y * C.W + x) * 4;
+        if (m < 0.36) { d[o] = 0x40; d[o + 1] = 0x58; d[o + 2] = 0x90; d[o + 3] = m < 0.26 ? 140 : 80; }
+        else if (m > 0.68) { d[o] = 0xff; d[o + 1] = 0xf4; d[o + 2] = 0xdc; d[o + 3] = m > 0.78 ? 76 : 40; }
+      }
+    }
+    var shade = U.makeCanvas(C.W, TILE_H);
+    shade.getContext('2d').putImageData(id, 0, 0);
+    cx.globalCompositeOperation = 'source-atop';
+    cx.drawImage(shade, 0, 0);
+    cx.globalCompositeOperation = 'source-over';
   }
 
   function bake(stage, variant, src) {
@@ -155,36 +210,20 @@
     var cx = cv.getContext('2d');
     cx.imageSmoothingEnabled = false;
 
-    if (src) {
-      paintRock(cx, src, variant);
-    } else {
-      cx.fillStyle = '#8b7a60';
-      cx.fillRect(0, 0, C.W, TILE_H);
-    }
-
-    // A stratum across the wrap join, which is where a cliff has one anyway.
-    cx.globalAlpha = 0.5;
-    cx.fillStyle = '#3a3324';
-    cx.fillRect(0, TILE_H - 2, C.W, 2);
-    cx.globalAlpha = 0.55;
-    cx.fillStyle = '#eef6fb';
-    cx.fillRect(0, TILE_H - 4, C.W, 2);
-    cx.globalAlpha = 1;
+    if (src) paintRock(cx, src, U.clamp(stage, 0, PAL.length - 1), variant);
+    else { cx.fillStyle = '#c8a088'; cx.fillRect(0, 0, C.W, TILE_H); }
 
     // Snow on the up-facing edges, heavier the higher you climb. Long and
     // thin, so none of it can be mistaken for somewhere to stand.
-    var drifts = Math.round(6 + p.snow * 20);
-    for (var d = 0; d < drifts; d++) {
+    var drifts = Math.round(4 + p.snow * 22);
+    for (var dd = 0; dd < drifts; dd++) {
       var dy = Math.floor(rnd() * TILE_H);
-      var dw = 90 + Math.floor(rnd() * 240);
+      var dw = 60 + Math.floor(rnd() * 200);
       var dx = Math.floor(rnd() * C.W) - dw / 2;
-      cx.globalAlpha = (0.16 + rnd() * 0.30) * (0.35 + p.snow);
+      cx.globalAlpha = (0.18 + rnd() * 0.30) * (0.35 + p.snow);
       cx.fillStyle = '#eef6fb';
       cx.fillRect(dx, dy, dw, 1);
-      if (rnd() < 0.5) {
-        cx.globalAlpha *= 0.55;
-        cx.fillRect(dx + 10, dy + 1, Math.max(4, dw - 20), 1);
-      }
+      if (rnd() < 0.5) { cx.globalAlpha *= 0.55; cx.fillRect(dx + 10, dy + 1, Math.max(4, dw - 20), 1); }
     }
     cx.globalAlpha = 1;
 
@@ -195,8 +234,8 @@
       var cy = rnd() * TILE_H;
       var slope = (rnd() - 0.5) * 0.9;
       var len = 50 + rnd() * 130;
-      cx.globalAlpha = 0.26 + rnd() * 0.2;
-      cx.fillStyle = '#2b2f27';
+      cx.globalAlpha = 0.35 + rnd() * 0.2;
+      cx.fillStyle = '#405890';
       for (var s = 0; s < len; s++) {
         var yy = (cy + s) % TILE_H;
         var xx = Math.round(cxp + slope * s + Math.sin(s * 0.3) * 2);
@@ -229,8 +268,8 @@
       var elx = Math.round(edge(ey, LEFT_MID, 1, phL));
       var erx = Math.round(edge(ey, RIGHT_MID, -1, phR));
       for (var e = 0; e < 26; e++) {
-        var k = 1 - e / 26;
-        cx.globalAlpha = k * k * 0.55;
+        var kk = 1 - e / 26;
+        cx.globalAlpha = kk * kk * 0.55;
         cx.fillStyle = C.COLORS.ink;
         cx.fillRect(erx - e - 1, ey, 1, 1);
         if (e < 10) {
