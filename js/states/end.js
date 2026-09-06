@@ -146,7 +146,7 @@
       if (data.result === 'summit' && isScoreRecord) {
         Aud.play('sfx_crystal', { volume: 0.5 });
         for (var i = 0; i < 20; i++) {
-          Part.spawn('sparkle', C.W / 2 - 60 + Math.random() * 120, 214 + Math.random() * 14, {
+          Part.spawn('sparkle', C.W / 2 - 60 + Math.random() * 120, SUM_SCORE_Y + Math.random() * 14, {
             vx: (Math.random() - 0.5) * 60, vy: -20 - Math.random() * 40,
             life: 0.5 + Math.random() * 0.5, w: 1, h: 1, color: COL.warn, alpha: 1, layer: 'front'
           });
@@ -180,14 +180,30 @@
     return U.easeOutCubic(U.clamp((t - at) / len, 0, 1));
   }
 
+  // ---- layout -------------------------------------------------------------
+  // Every slab shares one column width and a constant 8px gap, so the stack
+  // reads as one block instead of three centred rectangles of random size.
+  // The width comes from the title, which is the widest thing on the screen.
+  var PW = 290, PX = Math.round((C.W - PW) / 2);
+  var ROW_X0 = PX + 36, ROW_X1 = PX + PW - 36;
+  var ROW_STEP = 16;
+  var PANEL_A = 0.5;
+
+  var SUM_TITLE_Y = 22, SUM_TITLE_H = 64;
+  var SUM_STATS_Y = 94, SUM_STATS_H = 154;
+  var SUM_SCORE_Y = 212;
+  var FOOT_Y = 256, FOOT_H = 40;
+
   function drawSummit(ctx) {
     Par.drawNightSky(ctx, SITF.time, 1);
     drawStars(ctx);
     drawShoot(ctx);
-    ctx.drawImage(vistaFar, 0, 0);
-    drawCloudSea(ctx, SITF.time);
-    ctx.drawImage(vistaNear, 0, 0);
-    drawSummitFigure(ctx);
+    drawFarPeaks(ctx);
+    drawFogBands(ctx, SITF.time, 0, 1);
+    drawNearPeaks(ctx);
+    drawFogBands(ctx, SITF.time, 1, 2);
+    drawRoute(ctx);
+    drawFogBands(ctx, SITF.time, 2, 3);
     Part.draw(ctx, 'screen');
 
     ctx.save();
@@ -207,12 +223,12 @@
       ctx.save();
       ctx.globalAlpha = k1;
       var dy1 = Math.round((1 - k1) * -8);
-      U.softPanel(ctx, C.W / 2 - 150, 34 + dy1, 300, 68, 0.45);
-      Font.draw(ctx, 'SUMMIT REACHED', C.W / 2, 46 + dy1,
+      U.softPanel(ctx, PX, SUM_TITLE_Y + dy1, PW, SUM_TITLE_H, PANEL_A);
+      Font.draw(ctx, 'SUMMIT REACHED', C.W / 2, SUM_TITLE_Y + 7 + dy1,
                 { scale: 3, align: 'center', color: COL.accent, shadow: COL.ink });
       var k2 = reveal(T_ALT, 0.3);
       if (k2 > 0) {
-        Font.draw(ctx, M.altitudeOf(C.ROWS) + ' M', C.W / 2, 82 + dy1,
+        Font.draw(ctx, M.altitudeOf(C.ROWS) + ' M', C.W / 2, SUM_TITLE_Y + 39 + dy1,
                   { scale: 2, align: 'center', color: COL.text, shadow: COL.ink, alpha: k2 });
       }
       ctx.restore();
@@ -221,19 +237,23 @@
     // Stats block with the score beneath.
     var k3 = reveal(T_ROWS - 0.1, 0.3);
     if (k3 > 0) {
-      U.softPanel(ctx, C.W / 2 - 110, 104, 220, 144, 0.55 * k3);
-      drawResults(ctx, 108);
+      U.softPanel(ctx, PX, SUM_STATS_Y, PW, SUM_STATS_H, PANEL_A * k3);
+      drawResults(ctx, SUM_STATS_Y + 13);
 
       var ks = U.clamp((t - T_SCORE) / T_SCORE_LEN, 0, 1);
       if (ks > 0) {
+        // A hairline separates the tally from the total it adds up to.
+        ctx.fillStyle = U.rgba(COL.textDim, 0.22 * ks);
+        ctx.fillRect(ROW_X0, SUM_SCORE_Y - 8, ROW_X1 - ROW_X0, 1);
+
         var shown = Math.round((data.score || 0) * U.easeOutCubic(ks));
         var settled = ks >= 1;
         var pulse = 0.6 + 0.4 * Math.sin(t * 5);
-        Font.draw(ctx, 'SCORE ' + shown, C.W / 2, 212,
+        Font.draw(ctx, 'SCORE ' + shown, C.W / 2, SUM_SCORE_Y,
                   { scale: 2, align: 'center', color: (settled && isScoreRecord) ? COL.warn : COL.text,
                     shadow: COL.ink, alpha: (settled && isScoreRecord) ? pulse : 1 });
         if (settled) {
-          Font.draw(ctx, (isScoreRecord ? 'NEW BEST SCORE' : 'BEST ' + bestScore), C.W / 2, 234,
+          Font.draw(ctx, (isScoreRecord ? 'NEW BEST SCORE' : 'BEST ' + bestScore), C.W / 2, SUM_SCORE_Y + 21,
                     { scale: 1, align: 'center', color: COL.textDim, shadow: COL.ink });
         }
       }
@@ -243,105 +263,29 @@
   }
 
   // ---- summit vista -------------------------------------------------------
-  // The backdrop for the summit screen: three ranges of peaks receding into
-  // the aurora, the sea of cloud you climbed out of, and the crag you are
-  // standing on. Everything static is baked once into two canvases so the
-  // per-frame cost is three drawImage calls plus the drifting cloud strips.
+  // The backdrop is the mountain that was actually climbed: the same aurora
+  // sky and peak silhouette gameplay draws at the top of the route, with the
+  // real last rows of the generated route standing over the fog on the left,
+  // and the climber on the summit ledge beside the flags.
 
-  var vistaFar = null, vistaNear = null, clouds = null, stars = null;
+  var farPeaks = null, nearPeaks = null, fogBands = null, stars = null;
+  // The gameplay peak silhouette, slid so its tallest summit lands under the
+  // route's last ledge: the climber ends up standing on the actual peak.
+  // Its highest summit sits at (375, 156) in the source art.
+  var NEAR_PEAKS_X = 64 - 375, NEAR_PEAKS_Y = 168 - 156;
 
-  // A seamless height profile across the screen, built from harmonics whose
-  // periods divide the width exactly so the left and right edges agree.
-  function profile(seed, baseY, amp) {
-    var rnd = U.mulberry32(seed);
-    var k = [1 + Math.floor(rnd() * 2), 3 + Math.floor(rnd() * 2),
-             6 + Math.floor(rnd() * 3), 13 + Math.floor(rnd() * 6)];
-    var ph = [rnd() * 6.283, rnd() * 6.283, rnd() * 6.283, rnd() * 6.283];
-    var w = [0.50, 0.27, 0.15, 0.08];
-    var out = [];
-    for (var x = 0; x < C.W; x++) {
-      var v = 0;
-      for (var i = 0; i < 4; i++) v += Math.sin(2 * Math.PI * k[i] * x / C.W + ph[i]) * w[i];
-      out.push(Math.round(baseY - v * amp));
-    }
-    return out;
-  }
+  // How the route is framed on this screen: the same rows, ledges and lane
+  // order as gameplay, just held to the left of the text at a tighter lane
+  // spacing so the whole path fits beside the panels.
+  var VIS_ROWS = 6;
+  var VIS_LANE_X = [12, 64, 116];
+  var VIS_ROW_H = 30;
+  var VIS_SUMMIT_Y = 168;
+  var VIS_FOG_Y = 232;      // below here the route sinks into the fog
 
-  // Fill below the profile, then lay snow on the shoulders: deepest where the
-  // slope is shallow and the peak is high, which is where snow actually sits.
-  function paintRange(cx, prof, fill, snowCol, depth, snowLine) {
-    for (var x = 0; x < C.W; x++) {
-      var top = prof[x];
-      cx.fillStyle = fill;
-      cx.fillRect(x, top, 1, C.H - top);
-      if (depth <= 0 || top >= snowLine) continue;
-      var l = prof[x > 0 ? x - 1 : 0], r = prof[x < C.W - 1 ? x + 1 : C.W - 1];
-      var slope = Math.abs(r - l) / 2;
-      var d = Math.round(depth * U.clamp(1.3 - slope * 0.45, 0, 1) *
-                         U.clamp((snowLine - top) / 16, 0, 1));
-      if (d > 0) { cx.fillStyle = snowCol; cx.fillRect(x, top, 1, d); }
-    }
-  }
-
-  // Near crag: two gaussian humps in the bottom corners, roughened so the
-  // silhouette reads as rock rather than a curve.
-  function cragTop(x) {
-    var a = C.H + 10 - 80 * Math.exp(-Math.pow((x - 66) / 62, 2))
-                    - 22 * Math.exp(-Math.pow((x - 168) / 80, 2));
-    var b = C.H + 12 - 54 * Math.exp(-Math.pow((x - 540) / 56, 2))
-                    - 16 * Math.exp(-Math.pow((x - 448) / 66, 2));
-    var top = Math.min(a, b);
-    top += Math.sin(x * 0.71) * 1.1 + Math.sin(x * 0.23 + 1.7) * 2.0;
-    return Math.round(top);
-  }
-
-  function paintCrag(cx) {
-    var rnd = U.mulberry32(5150);
-    var prof = [];
-    for (var x = 0; x < C.W; x++) prof.push(cragTop(x));
-    for (x = 0; x < C.W; x++) {
-      var top = prof[x];
-      if (top >= C.H) continue;
-      cx.fillStyle = '#050e1c';
-      cx.fillRect(x, top, 1, C.H - top);
-
-      // Strata and grain, so the near rock is a face and not a black blob.
-      var band = Math.round(6 + 5 * Math.sin(x * 0.06 + 1.1) + 3 * Math.sin(x * 0.19));
-      cx.fillStyle = '#0d1e33';
-      cx.fillRect(x, top + band, 1, 2);
-      cx.fillRect(x, top + band + 9, 1, 1);
-      if (rnd() < 0.22) {
-        cx.fillStyle = '#16304a';
-        cx.fillRect(x, top + 3 + Math.floor(rnd() * 22), 1, 1);
-      }
-
-      var l = prof[x > 0 ? x - 1 : 0], r = prof[x < C.W - 1 ? x + 1 : C.W - 1];
-      var slope = Math.abs(r - l) / 2;
-      // Snow only on the shoulders of the humps; the low run-off toward the
-      // frame edges stays bare rock so the silhouette does not read as a wire.
-      var lie = U.clamp(1.25 - slope * 0.85, 0, 1) * U.clamp((C.H - 8 - top) / 14, 0, 1);
-      var d = Math.round((3 + rnd() * 2.2) * lie);
-      if (d > 0) {
-        // On a steep column the neighbour's surface sits several pixels lower;
-        // reach down to meet it, otherwise the snow breaks into dashes.
-        var gap = U.clamp(Math.max(l, r) - top, 0, 7);
-        var lit = Math.max(1, d);
-        cx.fillStyle = '#e2eef8';
-        cx.fillRect(x, top + 1, 1, lit);
-        cx.fillStyle = '#6d8ca8';
-        cx.fillRect(x, top + 1 + lit, 1, 2 + gap);
-        // Aurora rim on the very top pixel; it is the only light up here.
-        cx.fillStyle = U.rgba(COL.accent, 0.45 + 0.35 * lie);
-        cx.fillRect(x, top, 1, 1);
-      } else {
-        cx.fillStyle = U.rgba(COL.accent, 0.18);
-        cx.fillRect(x, top, 1, 1);
-      }
-    }
-  }
-
-  // One seamless band of cloud, scrolled twice side by side at draw time.
-  function cloudStrip(seed, h, fill, edge) {
+  // One seamless band of fog, scrolled twice side by side at draw time. The
+  // harmonics have whole-number periods across the width, so it wraps.
+  function fogStrip(seed, h, fill, edge) {
     var cv = U.makeCanvas(C.W, h);
     var cx = cv.getContext('2d');
     var rnd = U.mulberry32(seed);
@@ -361,31 +305,65 @@
     return cv;
   }
 
+  // The band of a silhouette's own top edge, `thickness` pixels deep: the
+  // shape with a copy of itself shifted down punched out of it. Done with
+  // compositing rather than pixel reads, which would taint the canvas when
+  // the game is opened straight off disk.
+  function topBand(src, thickness, color) {
+    var cv = U.makeCanvas(src.width, src.height);
+    var cx = cv.getContext('2d');
+    cx.drawImage(src, 0, 0);
+    cx.globalCompositeOperation = 'destination-out';
+    cx.drawImage(src, 0, thickness);
+    cx.globalCompositeOperation = 'source-atop';
+    cx.fillStyle = color;
+    cx.fillRect(0, 0, src.width, src.height);
+    return cv;
+  }
+
+  // The gameplay peak art, pushed back into the night and given the snow crest
+  // and aurora sheen the flat silhouette has no room for.
+  function bakePeaks(src, nightA, sheenA, crestA) {
+    var cv = U.makeCanvas(src.width, src.height);
+    var cx = cv.getContext('2d');
+    cx.drawImage(src, 0, 0);
+
+    cx.globalCompositeOperation = 'source-atop';
+    cx.fillStyle = U.rgba(COL.night, nightA);
+    cx.fillRect(0, 0, src.width, src.height);
+    var sg = cx.createLinearGradient(0, 120, 0, 300);
+    sg.addColorStop(0, U.rgba(COL.accent, sheenA));
+    sg.addColorStop(1, U.rgba(COL.accent, 0));
+    cx.fillStyle = sg;
+    cx.fillRect(0, 0, src.width, src.height);
+    cx.globalCompositeOperation = 'source-over';
+
+    cx.globalAlpha = crestA;
+    cx.drawImage(topBand(src, 3, U.rgba(COL.snow, 0.85)), 0, 0);
+    cx.globalAlpha = crestA * 0.8;
+    cx.drawImage(topBand(src, 1, U.rgba(COL.accent, 0.9)), 0, 0);
+    return cv;
+  }
+
   function buildVista() {
-    if (vistaFar) return;
+    if (fogBands) return;
 
-    vistaFar = U.makeCanvas(C.W, C.H);
-    var fc = vistaFar.getContext('2d');
-    paintRange(fc, profile(9101, 150, 22), '#122c47', '#2f5c80', 2, 148);
-    paintRange(fc, profile(9102, 178, 30), '#0d2039', '#27496b', 3, 172);
-    // Haze the ranges into the horizon: darker and flatter toward the base.
-    fc.globalCompositeOperation = 'source-atop';
-    var hg = fc.createLinearGradient(0, 120, 0, 240);
-    hg.addColorStop(0, U.rgba(COL.night, 0));
-    hg.addColorStop(1, U.rgba(COL.night, 0.75));
-    fc.fillStyle = hg;
-    fc.fillRect(0, 0, C.W, C.H);
-    fc.globalCompositeOperation = 'source-over';
+    // A hazed, offset copy of the gameplay peak silhouette, sitting further
+    // back. Same artwork, so the skyline stays the mountain of the game.
+    var peaks = SITF.Assets.img.peaks6;
+    if (peaks) {
+      farPeaks = bakePeaks(peaks, 0.62, 0.06, 0.22);
+      nearPeaks = bakePeaks(peaks, 0.20, 0.20, 0.62);
+    }
 
-    vistaNear = U.makeCanvas(C.W, C.H);
-    var nc = vistaNear.getContext('2d');
-    paintRange(nc, profile(9103, 216, 26), '#071426', '#193d5b', 3, 212);
-    paintCrag(nc);
-
-    clouds = [
-      { img: cloudStrip(7301, 46, '#2b4c6e', '#5c86a8'), y: 184, a: 0.30, sp: 3.0 },
-      { img: cloudStrip(7302, 50, '#1d3a58', '#4a7396'), y: 200, a: 0.42, sp: 6.5 },
-      { img: cloudStrip(7303, 56, '#12263f', '#3a5f80'), y: 220, a: 0.58, sp: 11.0 }
+    // Fog in the colours the game uses for fog at this altitude.
+    var f0 = U.mixHex(COL.fogNight, COL.night, 0.45);
+    var f1 = U.mixHex(COL.fogNight, COL.night, 0.62);
+    var f2 = U.mixHex(COL.fogNight, COL.night, 0.74);
+    fogBands = [
+      { img: fogStrip(7301, 48, f0, U.mixHex(COL.fogNight, COL.text, 0.25)), y: 214, a: 0.34, sp: 3.0 },
+      { img: fogStrip(7302, 54, f1, U.mixHex(COL.fogNight, COL.text, 0.12)), y: 238, a: 0.5, sp: 6.5 },
+      { img: fogStrip(7303, 62, f2, COL.fogNight), y: 266, a: 0.7, sp: 11.0 }
     ];
 
     var rnd = U.mulberry32(4242);
@@ -397,6 +375,71 @@
         big: rnd() < 0.18
       });
     }
+  }
+
+  function drawFarPeaks(ctx) {
+    if (!farPeaks) return;
+    ctx.save();
+    ctx.globalAlpha = 0.8;
+    var x = NEAR_PEAKS_X + 214, y = NEAR_PEAKS_Y + 24;
+    ctx.drawImage(farPeaks, x, y);
+    ctx.drawImage(farPeaks, x - farPeaks.width, y);
+    ctx.drawImage(farPeaks, x + farPeaks.width, y);
+    ctx.restore();
+  }
+
+  function drawNearPeaks(ctx) {
+    if (!nearPeaks) { Par.drawNightPeaks(ctx, C.ROWS * C.ROW_H, 1); return; }
+    ctx.drawImage(nearPeaks, NEAR_PEAKS_X, NEAR_PEAKS_Y);
+    ctx.drawImage(nearPeaks, NEAR_PEAKS_X + nearPeaks.width, NEAR_PEAKS_Y);
+  }
+
+  // The last rows of the real route, drawn with the gameplay ledge art.
+  function drawRoute(ctx) {
+    var top = M.row(C.ROWS);
+    if (!top) return;
+    var frame = Math.floor(SITF.time * 3) % 2;
+    for (var i = VIS_ROWS - 1; i >= 0; i--) {
+      var r = C.ROWS - i;
+      var row = M.row(r);
+      if (!row) continue;
+      var y = VIS_SUMMIT_Y + i * VIS_ROW_H;
+      if (y > C.H + 8) continue;
+      // Lower rows sink into the fog bank, the way they did on the climb.
+      var fade = U.clamp(1 - (y - VIS_FOG_Y) / 74, 0.12, 1);
+
+      ctx.save();
+      ctx.globalAlpha = fade;
+      for (var j = 0; j < row.footholds.length; j++) {
+        var f = row.footholds[j];
+        var x = VIS_LANE_X[U.clamp(f.lane, 0, 2)];
+        var type = (f.type === 'summit' || f.type === 'start') ? 'rock' : f.type;
+        S.drawLedge(ctx, x, y, type, 0, 0.18, row.zone, (r + j) % 2);
+      }
+      if (row.cairn) {
+        var cx = VIS_LANE_X[U.clamp(row.footholds[0].lane, 0, 2)] + 13;
+        S.drawGlow(ctx, S.img.glow_cairn, cx, y - 10, 0.5 * fade, 1.1);
+        S.drawCairn(ctx, cx, y, true, 1, Math.floor(SITF.time * 6) % 2);
+      }
+      if (row.summit) {
+        S.drawSummit(ctx, VIS_LANE_X[U.clamp(row.footholds[0].lane, 0, 2)] + 14, y, frame);
+      }
+      ctx.restore();
+    }
+
+    // You, on the summit ledge, lantern still lit.
+    var sx = VIS_LANE_X[U.clamp(top.footholds[0].lane, 0, 2)];
+    var sy = VIS_SUMMIT_Y;
+    var flick = 0.55 + 0.12 * Math.sin(SITF.time * 6.1) + 0.06 * Math.sin(SITF.time * 11.3);
+    ctx.save();
+    ctx.globalAlpha = 0.5;
+    ctx.drawImage(S.img.pool_lantern,
+                  Math.round(sx - S.img.pool_lantern.width / 2),
+                  Math.round(sy - S.img.pool_lantern.height / 2));
+    ctx.restore();
+    S.drawClimber(ctx, sx, sy, 'summit', 0, 1);
+    var lo = S.lanternOffset('summit');
+    S.drawGlow(ctx, S.img.glow_lantern, sx + lo.x, sy + lo.y, flick, 0.75);
   }
 
   function drawStars(ctx) {
@@ -434,36 +477,17 @@
     ctx.restore();
   }
 
-  function drawCloudSea(ctx, tt) {
+  // `from` selects which bands to draw, so the route can sit between them.
+  function drawFogBands(ctx, tt, from, to) {
     ctx.save();
-    for (var i = 0; i < clouds.length; i++) {
-      var c = clouds[i];
-      var off = -((tt * c.sp) % C.W);
-      ctx.globalAlpha = c.a;
-      ctx.drawImage(c.img, Math.round(off), c.y);
-      ctx.drawImage(c.img, Math.round(off) + C.W, c.y);
+    for (var i = from; i < to; i++) {
+      var b = fogBands[i];
+      var off = -((tt * b.sp) % C.W);
+      ctx.globalAlpha = b.a;
+      ctx.drawImage(b.img, Math.round(off), b.y);
+      ctx.drawImage(b.img, Math.round(off) + C.W, b.y);
     }
     ctx.restore();
-  }
-
-  // The payoff: you, on top, lantern still lit, flags planted beside you.
-  function drawSummitFigure(ctx) {
-    var fx = 66, fy = cragTop(66) + 1;
-    var frame = Math.floor(SITF.time * 3) % 2;
-    var flick = 0.55 + 0.12 * Math.sin(SITF.time * 6.1) + 0.06 * Math.sin(SITF.time * 11.3);
-
-    ctx.save();
-    ctx.globalAlpha = 0.5;
-    ctx.drawImage(S.img.pool_lantern,
-                  Math.round(fx - S.img.pool_lantern.width / 2),
-                  Math.round(fy - S.img.pool_lantern.height / 2));
-    ctx.restore();
-
-    S.drawSummit(ctx, 104, cragTop(104) + 1, frame);
-    S.drawClimber(ctx, fx, fy, 'summit', 0, 1);
-
-    var lo = S.lanternOffset('summit');
-    S.drawGlow(ctx, S.img.glow_lantern, fx + lo.x, fy + lo.y, flick, 0.75);
   }
 
   function drawWhiteout(ctx) {
@@ -494,17 +518,17 @@
       ctx.save();
       ctx.globalAlpha = k1;
       var dy1 = Math.round((1 - k1) * -8);
-      U.softPanel(ctx, C.W / 2 - 150, 34 + dy1, 300, 90, 0.6);
-      Font.draw(ctx, 'LOST IN THE', C.W / 2, 44 + dy1,
+      U.softPanel(ctx, PX, 22 + dy1, PW, 86, 0.62);
+      Font.draw(ctx, 'LOST IN THE', C.W / 2, 30 + dy1,
                 { scale: 2, align: 'center', color: COL.text, shadow: COL.ink });
-      Font.draw(ctx, 'WHITEOUT', C.W / 2, 64 + dy1,
+      Font.draw(ctx, 'WHITEOUT', C.W / 2, 52 + dy1,
                 { scale: 2, align: 'center', color: COL.text, shadow: COL.ink });
       var k2 = reveal(T_ALT, 0.3);
       if (k2 > 0) {
-        Font.draw(ctx, 'YOU REACHED ' + M.altitudeOf(data.row || 0) + ' M', C.W / 2, 92 + dy1,
+        Font.draw(ctx, 'YOU REACHED ' + M.altitudeOf(data.row || 0) + ' M', C.W / 2, 78 + dy1,
                   { scale: 1, align: 'center', color: COL.warn, shadow: COL.ink, alpha: k2 });
         // Progress toward the summit, marked at every cairn.
-        var bw = 200, bx = Math.round(C.W / 2 - bw / 2), by = 106 + dy1;
+        var bw = ROW_X1 - ROW_X0, bx = ROW_X0, by = 95 + dy1;
         var frac = U.clamp((data.row || 0) / C.ROWS, 0, 1) * k2;
         ctx.fillStyle = U.rgba(COL.textDim, 0.3);
         ctx.fillRect(bx, by, bw, 3);
@@ -522,40 +546,41 @@
 
     var k3 = reveal(T_ROWS - 0.1, 0.3);
     if (k3 > 0) {
-      U.softPanel(ctx, C.W / 2 - 150, 128, 300, 118, 0.6 * k3);
-      drawResults(ctx, 134);
+      U.softPanel(ctx, PX, 116, PW, 132, 0.62 * k3);
+      drawResults(ctx, 127);
       var kh = reveal(T_SCORE, 0.3);
       if (kh > 0) {
-        Font.draw(ctx, 'LIGHT CAIRNS TO PUSH THE WHITEOUT BACK.', C.W / 2, 232,
+        ctx.fillStyle = U.rgba(COL.textDim, 0.22 * kh);
+        ctx.fillRect(ROW_X0, 224, ROW_X1 - ROW_X0, 1);
+        Font.draw(ctx, 'LIGHT CAIRNS TO PUSH THE WHITEOUT BACK.', C.W / 2, 231,
                   { scale: 1, align: 'center', color: COL.textDim, alpha: kh });
       }
     }
 
-    drawFooter(ctx, 'ENTER  TRY AGAIN', 'ESC  TITLE');
+    drawFooter(ctx, 'ENTER  TRY AGAIN', 'ESC  TITLE', 0.62);
   }
 
   function drawResults(ctx, y) {
-    var lx = C.W / 2 - 82, rx = C.W / 2 + 82;
     for (var i = 0; i < rows.length; i++) {
       var k = U.clamp((t - (T_ROWS + i * T_ROW_STEP)) / T_ROW_LEN, 0, 1);
       if (k <= 0) continue;
       var e = U.easeOutCubic(k);
       var slide = Math.round((1 - e) * 6);
-      var yy = y + i * 16;
-      Font.draw(ctx, rows[i][0], lx - slide, yy, { scale: 1, color: COL.textDim, alpha: e });
-      Font.draw(ctx, rows[i][1], rx + slide, yy, { scale: 1, color: rows[i][2], align: 'right', alpha: e });
+      var yy = y + i * ROW_STEP;
+      Font.draw(ctx, rows[i][0], ROW_X0 - slide, yy, { scale: 1, color: COL.textDim, alpha: e });
+      Font.draw(ctx, rows[i][1], ROW_X1 + slide, yy, { scale: 1, color: rows[i][2], align: 'right', alpha: e });
     }
   }
 
-  function drawFooter(ctx, a, b) {
+  function drawFooter(ctx, a, b, alpha) {
     var k = reveal(T_FOOT, 0.3);
     if (k <= 0) return;
-    U.softPanel(ctx, C.W / 2 - 90, 254, 180, 36, 0.4 * k);
+    U.softPanel(ctx, PX, FOOT_Y, PW, FOOT_H, (alpha == null ? PANEL_A : alpha) * k);
     var blink = (t % 1.4) < 0.95;
     if (blink) {
-      Font.draw(ctx, a, C.W / 2, 262, { scale: 1, align: 'center', color: COL.accent, shadow: COL.ink, alpha: k });
+      Font.draw(ctx, a, C.W / 2, FOOT_Y + 8, { scale: 1, align: 'center', color: COL.accent, shadow: COL.ink, alpha: k });
     }
-    Font.draw(ctx, b, C.W / 2, 278, { scale: 1, align: 'center', color: COL.textDim, shadow: COL.ink, alpha: k });
+    Font.draw(ctx, b, C.W / 2, FOOT_Y + 23, { scale: 1, align: 'center', color: COL.textDim, shadow: COL.ink, alpha: k });
   }
 
   SITF.registerState('end', End);

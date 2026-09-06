@@ -75,15 +75,16 @@
     ctx.restore();
   };
 
-  // Aurora night stack (nature_6).
-  P.drawNight = function (ctx, climbPx, t, alpha) {
+  // Just the peak silhouette of the night stack, at the height it sits for a
+  // given climb. Split out alongside drawNightSky so other screens can put
+  // their own content between the sky and the peaks.
+  P.drawNightPeaks = function (ctx, climbPx, alpha) {
     if (alpha <= 0) return;
-    P.drawNightSky(ctx, t, alpha);
     ctx.save();
     ctx.globalAlpha = alpha;
 
     // Dark peaks rise into view through the final zone, then settle.
-    var peaksY = U.clamp((climbPx - 100 * C.ROW_H) * 0.10 + 60, 0, 190);
+    var peaksY = P.nightPeaksY(climbPx);
     var nGround = peaksY + NIGHT_GROUND_Y;
     if (nGround < C.H) {
       ctx.fillStyle = NIGHT_GROUND_COL;
@@ -92,6 +93,17 @@
     drawFull(ctx, img('peaks6'), 0, peaksY, alpha);
 
     ctx.restore();
+  };
+
+  P.nightPeaksY = function (climbPx) {
+    return U.clamp((climbPx - 100 * C.ROW_H) * 0.10 + 60, 0, 190);
+  };
+
+  // Aurora night stack (nature_6).
+  P.drawNight = function (ctx, climbPx, t, alpha) {
+    if (alpha <= 0) return;
+    P.drawNightSky(ctx, t, alpha);
+    P.drawNightPeaks(ctx, climbPx, alpha);
   };
 
   // How dusky / how nocturnal the sky is for a given row.
