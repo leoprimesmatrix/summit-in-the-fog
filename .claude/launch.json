@@ -1,0 +1,11 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "summit",
+      "runtimeExecutable": "node",
+      "runtimeArgs": ["serve.js", "8144"],
+      "port": 8144
+    }
+  ]
+}
