@@ -185,22 +185,24 @@
   };
 
   function drawControls(ctx) {
-    var boxW = 372, boxX = Math.round((C.W - boxW) / 2), boxY = 218, boxH = 76;
+    var boxW = 400, boxX = Math.round((C.W - boxW) / 2), boxY = 212, boxH = 82;
     U.panel(ctx, boxX, boxY, boxW, boxH, COL.ink, 0.55);
 
-    var cy = boxY + 10;
+    var cy = boxY + 8;
     var ax = boxX + 14;
     ctx.drawImage(S.img.arrow_l, ax, cy);
     ctx.drawImage(S.img.arrow_u, ax + 12, cy);
     ctx.drawImage(S.img.arrow_r, ax + 24, cy);
-    Font.draw(ctx, 'OR A W D   HOP TO THE NEXT LEDGE', ax + 40, cy + 1,
+    Font.draw(ctx, 'OR A W D   HOP UP.  Q E   LEAP TWO LANES', ax + 40, cy + 1,
               { scale: 1, color: COL.text });
 
-    Font.draw(ctx, 'EVERY LANDING RIPPLES THE FOG. KEEP MOVING TO KEEP SEEING.', C.W / 2, cy + 24,
+    Font.draw(ctx, 'Z X C   THROW THE AXE UP A LANE      F   FLARE', C.W / 2, cy + 16,
+              { scale: 1, align: 'center', color: COL.accent });
+    Font.draw(ctx, 'THE FOG HIDES THE PATH. STAND STILL AND YOUR LANTERN FINDS IT.', C.W / 2, cy + 30,
               { scale: 1, align: 'center', color: COL.textDim });
-    Font.draw(ctx, 'GUSTS SHOW FAR AHEAD. BLIND HOPS PAY DOUBLE.', C.W / 2, cy + 38,
+    Font.draw(ctx, 'GUSTS SHOW FAR AHEAD. WHAT YOU HAVE SEEN, YOU REMEMBER.', C.W / 2, cy + 42,
               { scale: 1, align: 'center', color: COL.textDim });
-    Font.draw(ctx, 'CAIRNS SAVE YOUR CLIMB. OUTRUN THE WHITEOUT.', C.W / 2, cy + 52,
+    Font.draw(ctx, 'LIGHT CAIRNS: CHECKPOINTS, AND THE ONLY SHELTER IN A STORM.', C.W / 2, cy + 54,
               { scale: 1, align: 'center', color: COL.textDim });
   }
 

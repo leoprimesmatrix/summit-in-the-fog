@@ -247,6 +247,19 @@
     }
 
     var targetRow = climber.row + 1;
+
+    // Reach: press a direction and go as far that way as there is rock.
+    // Nearly one foothold in five on this mountain can only be left by a
+    // two-lane move, starting at row 1, so a player using only the arrow
+    // keys would fall off a route that looked perfectly reachable. Pressing
+    // left or right now extends to two lanes when one lane holds nothing,
+    // which is what the player meant; Q and E stay as the explicit choice
+    // for when both distances have rock and you want the far one.
+    if (Math.abs(dir) === 1 && !M.footholdAt(targetRow, climber.lane + dir)) {
+      var far = climber.lane + dir * 2;
+      if (far >= 0 && far <= laneMax() && M.footholdAt(targetRow, far)) dir *= 2;
+    }
+
     var targetLane = climber.lane + dir;
     if (dir !== 0) climber.facing = dir > 0 ? 1 : -1;
     // A two-lane leap is slower and higher: committing to one is a real cost.
@@ -1522,8 +1535,36 @@
     }
   }
 
+  // Base camp is where the mountain explains itself. Nothing here is
+  // discoverable by pressing the keys you already know: the axe and the flare
+  // have no analogue in a hop-and-climb game, and a player who never finds
+  // them is playing a much worse one. So while the camp is under you, the
+  // controls are simply written down.
+  var LESSONS = [
+    { from: 0,  text: 'ARROWS OR A W D   HOP UP TO THE NEXT LEDGE' },
+    { from: 4,  text: 'THE FOG HIDES THE PATH.  STAND STILL: YOUR LANTERN FINDS IT' },
+    { from: 8,  text: 'Z X C   THROW YOUR AXE UP A LANE. IT SPARKS ON ROCK' },
+    { from: 13, text: 'F   LIGHT A FLARE. TEN ROWS, EVERY LANE. YOU CARRY THREE' },
+    { from: 17, text: 'LIGHT EVERY CAIRN. IN A STORM THEY ARE THE ONLY SHELTER' }
+  ];
+
+  function drawLesson(ctx) {
+    if (climber.row > C.ZONES[0].to + 2) return;
+    var pick = null;
+    for (var i = 0; i < LESSONS.length; i++) {
+      if (climber.row >= LESSONS[i].from) pick = LESSONS[i];
+    }
+    if (!pick) return;
+    var w = Font.width(pick.text, 1);
+    var x = Math.round(C.W / 2 - w / 2), y = C.H - 42;
+    U.softPanel(ctx, x - 10, y - 5, w + 20, 19, 0.5);
+    Font.draw(ctx, pick.text, C.W / 2, y,
+              { scale: 1, align: 'center', color: COL.text, shadow: COL.ink });
+  }
+
   function drawHUD(ctx, rf) {
     drawBreath(ctx);
+    drawLesson(ctx);
     // Altitude readout, top-left.
     var alt = M.altitudeOf(U.clamp(rf, 0, C.ROWS));
     var altText = alt + ' M';
