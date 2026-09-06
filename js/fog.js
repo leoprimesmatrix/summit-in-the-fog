@@ -22,6 +22,9 @@
     surge: 0
   };
 
+  // The haze that never clears, as a fraction of the bank's own density.
+  var RESIDUAL = 0.10;
+
   var low = null, lowCtx = null;
   var tileA = null, tileB = null;
 
@@ -208,12 +211,23 @@
 
     // Bank of fog above the climber. Its lower edge rolls rather than sitting
     // on a ruled line, so it reads as weather instead of a UI element.
-    // The skirt is a per-pixel ramp rather than three wide steps: stepping it
-    // put visible bands, and starting the first step at 0.45 left a ruled
-    // line where the solid bank ended. It now leaves the bank at nearly full
-    // strength and falls away over 32 real pixels.
-    var skirt = 16; // half-res px (32 real)
-    lowCtx.fillStyle = color;
+    // The bank does not stop at the climber's feet, it thins out below them.
+    // Once the fog was made light enough to see the mountain through, a skirt
+    // that reached zero in 32 pixels left a bright edge ruled across the face
+    // wherever the rock below was darker than the fog above. Real weather has
+    // no such line: it fades over a long way and never quite clears, so the
+    // ramp now runs 80 pixels and settles onto a thin residual haze that
+    // carries all the way to the foot of the screen.
+    var skirt = 40; // half-res px (80 real)
+
+    // The ramp is one gradient reused for every column, translated to that
+    // column's fog line, instead of forty alpha-stepped rectangles each: same
+    // curve, no quantisation into bands, and a fifth of the work.
+    var ramp = lowCtx.createLinearGradient(0, 0, 0, skirt);
+    for (var st = 0; st <= 8; st++) {
+      var uu = st / 8;
+      ramp.addColorStop(uu, U.rgba(color, density * ((1 - uu) * (1 - uu) * (1 - RESIDUAL) + RESIDUAL)));
+    }
 
     for (var x = 0; x < LOW_W; x += 2) {
       var wob = Math.sin(x * 0.09 + t * 0.7) * 3.5 +
@@ -221,18 +235,25 @@
       var lineY = fogLineY + wob;
 
       lowCtx.globalAlpha = density;
+      lowCtx.fillStyle = color;
       if (lineY > 0) lowCtx.fillRect(x, 0, 2, lineY);
 
-      // Each column's steps sit at a different sub-pixel offset, so the ramp
-      // does not quantise into bands that line up across the screen.
-      var jitter = ((x * 7919) % 32) / 32;
-      for (var i = 0; i < skirt; i++) {
-        var u = (i + 1) / skirt;
-        lowCtx.globalAlpha = density * (1 - u) * (1 - u);
-        lowCtx.fillRect(x, lineY + i + jitter, 2, 1);
+      lowCtx.globalAlpha = 1;
+      lowCtx.save();
+      lowCtx.translate(x, lineY);
+      lowCtx.fillStyle = ramp;
+      lowCtx.fillRect(0, 0, 2, skirt);
+      lowCtx.restore();
+
+      var below = lineY + skirt;
+      if (below < LOW_H) {
+        lowCtx.globalAlpha = density * RESIDUAL;
+        lowCtx.fillStyle = color;
+        lowCtx.fillRect(x, below, 2, LOW_H - below);
       }
     }
     lowCtx.globalAlpha = 1;
+    lowCtx.fillStyle = color;
 
     // Drifting cloud layers inside the bank. The clip used to stop dead at
     // the foot of the skirt, which showed as a rule straight across the

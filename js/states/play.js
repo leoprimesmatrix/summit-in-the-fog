@@ -941,8 +941,9 @@
 
     Par.draw(ctx, rf, climbPx, SITF.time);
 
-    // The face itself, in front of the painted range and behind the fog: it
-    // is revealed by the same weather that reveals the route.
+    // Air over the painted range, then the face itself in front of it and
+    // behind the fog: the same weather reveals both.
+    Par.distanceHaze(ctx, rf);
     SITF.RockFace.draw(ctx, toScreenY, rf);
 
     ctx.restore();

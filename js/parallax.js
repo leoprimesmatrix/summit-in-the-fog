@@ -142,8 +142,8 @@
   P.forestAt = function (rowFloat) { return 1 - U.smoothstep(12, 30, rowFloat); };
 
   // How dusky / how nocturnal the sky is for a given row.
-  P.duskAt = function (rowFloat) { return U.smoothstep(56, 74, rowFloat); };
-  P.nightAt = function (rowFloat) { return U.smoothstep(112, 128, rowFloat); };
+  P.duskAt = function (rowFloat) { return U.smoothstep(88, 120, rowFloat); };
+  P.nightAt = function (rowFloat) { return U.smoothstep(128, 152, rowFloat); };
 
   // A colour cast per stage, so the glacier is cold and the ridge is not.
   // Kept light: the backdrop art and the sky do most of the work.
@@ -197,6 +197,22 @@
 
     // Finally the stage's own light on all of it.
     P.grade(ctx, rowFloat);
+  };
+
+  // Air between the camera and the painted range. Drawn after the backdrop
+  // and before the rib you are climbing, it is what makes one of them far
+  // away and the other close: without it both are the same artwork at the
+  // same contrast and the rib reads as wallpaper.
+  P.distanceHaze = function (ctx, rowFloat) {
+    ctx.save();
+    var g = ctx.createLinearGradient(0, 0, 0, C.H);
+    var c = P.fogColorAt(rowFloat);
+    g.addColorStop(0, U.rgba(c, 0.22));
+    g.addColorStop(0.55, U.rgba(c, 0.15));
+    g.addColorStop(1, U.rgba(c, 0.06));
+    ctx.fillStyle = g;
+    ctx.fillRect(0, 0, C.W, C.H);
+    ctx.restore();
   };
 
   // Fog tint follows the light: cool white by day, grey-blue on the ridge,

@@ -3,41 +3,60 @@
   var C = SITF.Config;
   var U = SITF.Util;
 
-  // The face you are actually climbing. A buttress of rock standing in front
-  // of the painted range, with the ledges bolted onto it, so the route reads
-  // as a mountain instead of stones floating over a landscape. The vista is
-  // still visible down both edges of the frame.
+  // The face you are actually climbing.
   //
-  // Everything is baked into two tall tiles per stage that wrap vertically:
-  // the silhouette is a sum of sines whose periods divide the tile height, so
-  // tile ends meet exactly and the cliff is continuous however far you climb.
+  // This answers a real question: if the ledges hang in front of the painted
+  // range you are climbing thin air, but if a wall is drawn over the range
+  // then the mountain is gone. So the wall is cut out of the range itself -
+  // horizontal bands of the nature_3 peak at 1:1 pixel scale, stacked into a
+  // buttress that stands in front of the same mountain seen at distance. The
+  // rock you hold is the rock on the horizon: same palette, same brush, same
+  // mountain. The rib is narrow enough that the peak stays visible past both
+  // of its shoulders, so you can always see what you are on.
+  //
+  // Each stage tints that stone toward its own light, so the higher you climb
+  // the colder it gets without ever becoming a different mountain.
 
   var R = {};
 
   var TILE_H = 240;          // 8 rows
-  // The buttress is narrower than the frame on purpose: the painted range is
-  // the mountain, and this is one rib of it, so the view past both shoulders
-  // has to stay open or the scenery is replaced by a wall.
-  var LEFT_MID = 112, RIGHT_MID = 464;
-  var EDGE_AMP = [16, 9, 4];
+  var LEFT_MID = 122, RIGHT_MID = 454;
+  var EDGE_AMP = [17, 10, 5];
   var EDGE_K = [1, 3, 7];    // whole periods across the tile: it wraps
-  var FRINGE = 14;           // pixels of haze at each silhouette edge
+  var FRINGE = 16;           // pixels of haze at each silhouette edge
+  var FADE = 14;             // cross-fade between stacked bands
 
-  // rock: [shadow, body, light], grain, snow/rime, how much rime, and how far
-  // the whole face is pushed back into the atmosphere. The recede value is
-  // what keeps the wall behind the route instead of competing with it: the
-  // ledges you can stand on must always be the brightest thing on the rock.
-  // Taken toward the colours of the painted range so the rib belongs to the
-  // same mountain, with real snow on it rather than a dark slab.
+  // Bands taken from the cliff-and-ledge middle of the painted peak, clear of
+  // the summit cone and the forest at its foot, so a tile reads as rock and
+  // never as a small picture of a mountain repeating.
+  // Taken from the snow-and-rock upper third of the peak, not its middle:
+  // the mountain's green terraces are the same shape and size as the ledge
+  // sprites, and a wall built out of them is unreadable - you cannot tell
+  // what you can stand on. Up here it is all cliff band, snow and stone.
+  var BANDS = [
+    [{ sy: 88, h: 86 }, { sy: 60, h: 80 }, { sy: 118, h: 74 }],
+    [{ sy: 104, h: 82 }, { sy: 68, h: 84 }, { sy: 134, h: 74 }]
+  ];
+
+  // Per-stage light on the same stone, and how far back in the air it sits.
+  // Receding is what keeps the ledges the brightest thing on the wall.
+  // The rib has to stand apart from whatever is behind it or it dissolves and
+  // the ledges are floating again - but which way depends on the light. Low
+  // down, against a bright sky and green hills, that means a touch darker.
+  // Under the aurora the distant peaks are already near-black, so a face a
+  // few metres from your nose is the BRIGHTEST thing in frame: thick rime
+  // catching the sky. Darkening it there made it vanish into the night.
   var PAL = [
-    { d: '#5c6450', b: '#78805f', l: '#93996f', g: '#464d3b', s: '#e8f0f4', rime: 0.42, recede: 0.16 },
-    { d: '#6b5f4c', b: '#8b7a60', l: '#a89474', g: '#4d4436', s: '#eef4f8', rime: 0.50, recede: 0.16 },
-    { d: '#6a8296', b: '#88a1b6', l: '#a6bfd2', g: '#4e6376', s: '#f4fbff', rime: 0.72, recede: 0.14 },
-    { d: '#5a6270', b: '#737c8c', l: '#8e97a6', g: '#424956', s: '#e9f1f8', rime: 0.62, recede: 0.14 },
-    { d: '#464f5e', b: '#5c6675', l: '#77818f', g: '#333a46', s: '#f2f8ff', rime: 0.78, recede: 0.12 }
+    { tint: '#8fa06a', tintA: 0.12, recede: 0.10, snow: 0.12 },
+    { tint: '#d0a878', tintA: 0.08, recede: 0.14, snow: 0.22 },
+    { tint: '#8fb8dc', tintA: 0.32, recede: 0.22, snow: 0.60 },
+    { tint: '#9fb0d8', tintA: 0.34, recede: 0.20, snow: 0.64 },
+    { tint: '#b9d2ee', tintA: 0.42, recede: 0.06, snow: 0.88 }
   ];
 
   var tiles = null;          // tiles[stage] = [canvasA, canvasB]
+  var mask = null;           // the buttress silhouette, shared by every tile
+  var phL = null, phR = null;
 
   function edge(y, mid, sign, phase) {
     var v = 0;
@@ -47,138 +66,195 @@
     return mid + sign * v;
   }
 
-  // Deterministic 0..1 grain, so a tile bakes the same on every machine.
-  function hash2(x, y) {
-    var h = Math.imul(x | 0, 374761393) ^ Math.imul(y | 0, 668265263);
-    h = Math.imul(h ^ (h >>> 13), 1274126177);
-    return ((h ^ (h >>> 16)) >>> 0) / 4294967296;
+  function phases() {
+    if (phL) return;
+    var pr = U.mulberry32(880);
+    phL = [pr() * 6.283, pr() * 6.283, pr() * 6.283];
+    phR = [pr() * 6.283, pr() * 6.283, pr() * 6.283];
   }
 
-  function bake(stage, variant) {
+  // The rib's outline, feathered at both edges so it dissolves into the air
+  // rather than ending on a ruled line. One mask serves every tile.
+  function buildMask() {
+    phases();
+    var cv = U.makeCanvas(C.W, TILE_H);
+    var cx = cv.getContext('2d');
+    cx.fillStyle = '#ffffff';
+    for (var y = 0; y < TILE_H; y++) {
+      var lx = Math.round(edge(y, LEFT_MID, 1, phL));
+      var rx = Math.round(edge(y, RIGHT_MID, -1, phR));
+      if (rx <= lx) continue;
+      cx.globalAlpha = 1;
+      cx.fillRect(lx, y, rx - lx, 1);
+      for (var f = 0; f < FRINGE; f++) {
+        var a = 1 - (f + 1) / (FRINGE + 1);
+        cx.globalAlpha = a * a;
+        cx.fillRect(lx - f - 1, y, 1, 1);
+        cx.fillRect(rx + f, y, 1, 1);
+      }
+    }
+    return cv;
+  }
+
+  // One band of source rock, its top edge cross-faded into whatever is
+  // already there through a gradient mask. Averaging two copies of the whole
+  // tile (the usual seamless-tile fold) greyed the art into mud and threw
+  // away the thing that made it worth using; this keeps every band crisp and
+  // only softens the joins.
+  function blitBand(dst, src, sy, dy, h, fade) {
+    var t = U.makeCanvas(C.W, h + fade);
+    var tc = t.getContext('2d');
+    tc.imageSmoothingEnabled = false;
+    tc.drawImage(src, 0, sy - fade, C.W, h + fade, 0, 0, C.W, h + fade);
+    if (fade > 0) {
+      // One pass, covering the whole canvas. destination-in clears every
+      // pixel the source does not cover, so masking the top strip and then
+      // the body in two fills wipes out whichever was kept first - which is
+      // exactly how this silently baked a set of entirely empty tiles.
+      tc.globalCompositeOperation = 'destination-in';
+      var g = tc.createLinearGradient(0, 0, 0, h + fade);
+      g.addColorStop(0, 'rgba(0,0,0,0)');
+      g.addColorStop(fade / (h + fade), 'rgba(0,0,0,1)');
+      g.addColorStop(1, 'rgba(0,0,0,1)');
+      tc.fillStyle = g;
+      tc.fillRect(0, 0, C.W, h + fade);
+    }
+    dst.drawImage(t, 0, dy - fade);
+  }
+
+  function paintRock(cx, src, variant) {
+    var set = BANDS[variant % BANDS.length];
+    var y = 0;
+    for (var i = 0; i < set.length && y < TILE_H; i++) {
+      var b = set[i];
+      var h = Math.min(b.h, TILE_H - y);
+      blitBand(cx, src, b.sy, y, h, i === 0 ? 0 : FADE);
+      y += h;
+    }
+    if (y < TILE_H) blitBand(cx, src, set[0].sy, y, TILE_H - y, FADE);
+
+    // Make the tile wrap: its last rows melt back into its first.
+    var cv = cx.canvas;
+    var tail = U.makeCanvas(C.W, FADE * 2);
+    var tx = tail.getContext('2d');
+    tx.imageSmoothingEnabled = false;
+    tx.drawImage(cv, 0, 0, C.W, FADE * 2, 0, 0, C.W, FADE * 2);
+    tx.globalCompositeOperation = 'destination-in';
+    var g2 = tx.createLinearGradient(0, 0, 0, FADE * 2);
+    g2.addColorStop(0, 'rgba(0,0,0,1)');
+    g2.addColorStop(1, 'rgba(0,0,0,0)');
+    tx.fillStyle = g2;
+    tx.fillRect(0, 0, C.W, FADE * 2);
+    cx.drawImage(tail, 0, TILE_H - FADE * 2);
+  }
+
+  function bake(stage, variant, src) {
     var p = PAL[U.clamp(stage, 0, PAL.length - 1)];
     var rnd = U.mulberry32(4700 + stage * 31 + variant * 7);
     var cv = U.makeCanvas(C.W, TILE_H);
     var cx = cv.getContext('2d');
+    cx.imageSmoothingEnabled = false;
 
-    // Phases are per stage, not per variant, so A and B share a silhouette
-    // and can be stacked in any order without a seam.
-    var pr = U.mulberry32(880 + stage);
-    var phL = [pr() * 6.283, pr() * 6.283, pr() * 6.283];
-    var phR = [pr() * 6.283, pr() * 6.283, pr() * 6.283];
-    var vp = variant * 1.7;
+    if (src) {
+      paintRock(cx, src, variant);
+    } else {
+      cx.fillStyle = '#8b7a60';
+      cx.fillRect(0, 0, C.W, TILE_H);
+    }
 
-    var cd = U.hexToRgb(p.d), cb = U.hexToRgb(p.b), cl = U.hexToRgb(p.l);
-    var cg = U.hexToRgb(p.g), cs = U.hexToRgb(p.s);
+    // A stratum across the wrap join, which is where a cliff has one anyway.
+    cx.globalAlpha = 0.5;
+    cx.fillStyle = '#3a3324';
+    cx.fillRect(0, TILE_H - 2, C.W, 2);
+    cx.globalAlpha = 0.55;
+    cx.fillStyle = '#eef6fb';
+    cx.fillRect(0, TILE_H - 4, C.W, 2);
+    cx.globalAlpha = 1;
 
-    // Every y term is a whole number of periods across the tile, so the tile
-    // stacks on itself without a seam.
-    var YW = 2 * Math.PI / TILE_H;
-
-    var img = cx.createImageData(C.W, TILE_H);
-    var data = img.data;
-
-    for (var y = 0; y < TILE_H; y++) {
-      var lxf = edge(y, LEFT_MID, 1, phL);
-      var rxf = edge(y, RIGHT_MID, -1, phR);
-      var lx = Math.round(lxf), rx = Math.round(rxf);
-      if (rx <= lx) continue;
-      var span = rx - lx;
-
-      // Buttresses: vertical ribs that meander, so the face has volume
-      // instead of reading as a slab.
-      var ribPhase = Math.sin(3 * YW * y + vp) * 1.4 + Math.sin(7 * YW * y) * 0.5;
-
-      for (var x = lx - FRINGE; x < rx + FRINGE; x++) {
-        if (x < 0 || x >= C.W) continue;
-
-        // Broad beds that tilt and sag with x: a band is never a straight
-        // line, and never the same line twice across the width.
-        var strata = Math.sin(9 * YW * y +
-                              Math.sin(x * 0.012 + vp) * 3.0 +
-                              Math.sin(x * 0.043) * 0.8 +
-                              Math.sin(5 * YW * y) * 2.2);
-        var rib = Math.sin(x * 0.055 + ribPhase);
-        var gully = Math.sin(x * 0.018 + Math.sin(5 * YW * y) * 0.8 + vp);
-        var acrossLight = 1 - U.clamp((x - lx) / span, 0, 1);   // lit from the left
-
-        var v = 0.40 +
-                rib * 0.15 +
-                gully * 0.16 +
-                strata * 0.09 +
-                acrossLight * 0.26 +
-                (hash2(x, y) - 0.5) * 0.10;
-
-        var r, g, b;
-        if (v < 0.34) { r = cd[0]; g = cd[1]; b = cd[2]; }
-        else if (v < 0.62) { r = cb[0]; g = cb[1]; b = cb[2]; }
-        else { r = cl[0]; g = cl[1]; b = cl[2]; }
-
-        // Snow lies in drifts on the up-facing side of a bed, thick enough to
-        // read as an alpine face rather than bare rock, but clumped by a big
-        // soft mask so it never stripes every bed the same way.
-        if (strata > 0.972) { r = cg[0]; g = cg[1]; b = cg[2]; }
-        else if (strata > 0.52 && strata < 0.96) {
-          // Low frequencies only: a drift runs the width of the buttress and
-          // thins away, so it never reads as a ledge-sized bar of white the
-          // player might try to stand on.
-          var clump = Math.sin(x * 0.0042 + 3 * YW * y + vp) * 0.6 +
-                      Math.sin(x * 0.0095 + 7 * YW * y) * 0.4;
-          if (clump > 0.10 && hash2(x + 7, y + 3) < p.rime) {
-            // Deepest where the bed is flattest, thinning to nothing at the
-            // edges of the drift.
-            var depth = U.clamp((strata - 0.52) / 0.30, 0, 1);
-            var mixA = (0.22 + hash2(x, y + 11) * 0.28 + depth * 0.38) *
-                       U.clamp((clump - 0.10) / 0.5, 0, 1);
-            r = Math.round(r + (cs[0] - r) * mixA);
-            g = Math.round(g + (cs[1] - g) * mixA);
-            b = Math.round(b + (cs[2] - b) * mixA);
-          }
-        }
-
-        // Alpha: solid inside, feathering into the vista at both silhouettes.
-        var a = 255;
-        if (x < lx) { var fl = (lx - x) / (FRINGE + 1); a = Math.round(255 * (1 - fl) * (1 - fl)); }
-        else if (x >= rx) { var fr = (x - rx + 1) / (FRINGE + 1); a = Math.round(255 * (1 - fr) * (1 - fr)); }
-        if (a <= 0) continue;
-
-        var i = (y * C.W + x) * 4;
-        data[i] = r; data[i + 1] = g; data[i + 2] = b; data[i + 3] = a;
+    // Snow on the up-facing edges, heavier the higher you climb. Long and
+    // thin, so none of it can be mistaken for somewhere to stand.
+    var drifts = Math.round(6 + p.snow * 20);
+    for (var d = 0; d < drifts; d++) {
+      var dy = Math.floor(rnd() * TILE_H);
+      var dw = 90 + Math.floor(rnd() * 240);
+      var dx = Math.floor(rnd() * C.W) - dw / 2;
+      cx.globalAlpha = (0.16 + rnd() * 0.30) * (0.35 + p.snow);
+      cx.fillStyle = '#eef6fb';
+      cx.fillRect(dx, dy, dw, 1);
+      if (rnd() < 0.5) {
+        cx.globalAlpha *= 0.55;
+        cx.fillRect(dx + 10, dy + 1, Math.max(4, dw - 20), 1);
       }
     }
-    cx.putImageData(img, 0, 0);
+    cx.globalAlpha = 1;
 
-    // Cracks: a few long diagonals per tile, wrapped off the ends.
+    // Cracks running down the face, wrapped across the tile boundary.
     var cracks = 3 + Math.floor(rnd() * 3);
     for (var k = 0; k < cracks; k++) {
-      var cxp = 120 + rnd() * 320;
+      var cxp = LEFT_MID + 20 + rnd() * (RIGHT_MID - LEFT_MID - 40);
       var cy = rnd() * TILE_H;
       var slope = (rnd() - 0.5) * 0.9;
-      var len = 40 + rnd() * 120;
-      cx.fillStyle = p.g;
+      var len = 50 + rnd() * 130;
+      cx.globalAlpha = 0.26 + rnd() * 0.2;
+      cx.fillStyle = '#2b2f27';
       for (var s = 0; s < len; s++) {
         var yy = (cy + s) % TILE_H;
         var xx = Math.round(cxp + slope * s + Math.sin(s * 0.3) * 2);
-        var el = edge(yy, LEFT_MID, 1, phL), er = edge(yy, RIGHT_MID, -1, phR);
-        if (xx > el + 4 && xx < er - 4) cx.fillRect(xx, Math.round(yy), 1, 1);
+        if (xx > LEFT_MID && xx < RIGHT_MID) cx.fillRect(xx, Math.round(yy), 1, 1);
       }
     }
+    cx.globalAlpha = 1;
 
-    // Push the whole wall back into the air between it and the camera.
+    // The stage's own light, then the air between the wall and the camera.
     cx.globalCompositeOperation = 'source-atop';
-    cx.fillStyle = U.rgba(C.COLORS.ink, p.recede);
+    cx.fillStyle = U.rgba(p.tint, p.tintA);
     cx.fillRect(0, 0, C.W, TILE_H);
+    if (p.recede > 0) {
+      cx.fillStyle = U.rgba(C.COLORS.ink, p.recede);
+      cx.fillRect(0, 0, C.W, TILE_H);
+    }
+
+    // Cut the rib out of the band.
+    cx.globalCompositeOperation = 'destination-in';
+    cx.drawImage(mask, 0, 0);
+    cx.globalCompositeOperation = 'source-over';
+
+    // Round it off. Without this the rib is the same flat plane as the range
+    // behind it and you cannot tell you are in front of anything: a lit arete
+    // down the left edge and a deep shadow inside the right one read as mass,
+    // and say which of the two mountains you are standing on.
+    phases();
+    cx.globalCompositeOperation = 'source-atop';
+    for (var ey = 0; ey < TILE_H; ey++) {
+      var elx = Math.round(edge(ey, LEFT_MID, 1, phL));
+      var erx = Math.round(edge(ey, RIGHT_MID, -1, phR));
+      for (var e = 0; e < 26; e++) {
+        var k = 1 - e / 26;
+        cx.globalAlpha = k * k * 0.55;
+        cx.fillStyle = C.COLORS.ink;
+        cx.fillRect(erx - e - 1, ey, 1, 1);
+        if (e < 10) {
+          cx.globalAlpha = (1 - e / 10) * 0.22;
+          cx.fillStyle = '#fff4dc';
+          cx.fillRect(elx + e, ey, 1, 1);
+        }
+      }
+    }
+    cx.globalAlpha = 1;
     cx.globalCompositeOperation = 'source-over';
     return cv;
   }
 
   R.build = function () {
     if (tiles) return;
+    mask = buildMask();
+    var src = SITF.Assets.img.peak3 || null;
     tiles = [];
-    for (var s = 0; s < PAL.length; s++) tiles.push([bake(s, 0), bake(s, 1)]);
+    for (var s = 0; s < PAL.length; s++) tiles.push([bake(s, 0, src), bake(s, 1, src)]);
   };
 
-  // Which stage's rock we are looking at at a given world row, blended so the
-  // palette changes over a few rows rather than switching on one line.
+  // Which stage's rock we are looking at, blended so the light changes over a
+  // few rows rather than switching on one line.
   function stageAt(rowFloat) {
     var Z = C.ZONES;
     var i = U.zoneIndexOf(Math.floor(U.clamp(rowFloat, 0, C.ROWS)));
@@ -221,6 +297,9 @@
     }
     ctx.restore();
   };
+
+  // Exposed for the playtest harness so a baked tile can be eyeballed.
+  R.tiles = function () { R.build(); return tiles; };
 
   R.TILE_H = TILE_H;
   SITF.RockFace = R;

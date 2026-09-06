@@ -23,11 +23,11 @@
 
   // Altitude curves. Keep these next to each other so the whole climb can be
   // read at once: what appears where, and how fast it settles.
-  function sunDrop(rf)     { return U.smoothstep(20, 78, rf); }     // high in the haze -> below the cloud deck
-  function cloudIn(rf)     { return U.smoothstep(34, 56, rf); }     // deck fades in as it descends to meet you
-  function duskStars(rf)   { return U.smoothstep(66, 116, rf); }    // pinpricks before the night stack exists
-  function moonRise(rf)    { return U.smoothstep(108, 148, rf); }
-  function summitNear(rf)  { return U.smoothstep(120, 180, rf); }   // aurora and meteors ramp to the top
+  function sunDrop(rf)     { return U.smoothstep(22, 104, rf); }     // high in the haze -> below the cloud deck
+  function cloudIn(rf)     { return U.smoothstep(44, 68, rf); }     // deck fades in as it descends to meet you
+  function duskStars(rf)   { return U.smoothstep(96, 134, rf); }    // pinpricks before the night stack exists
+  function moonRise(rf)    { return U.smoothstep(124, 158, rf); }
+  function summitNear(rf)  { return U.smoothstep(134, 180, rf); }   // aurora and meteors ramp to the top
 
   // Seamless horizontal band with a soft top edge. Harmonics use whole
   // periods across the width, so the strip tiles without a seam.
@@ -141,7 +141,7 @@
     build();
     var night = SITF.Parallax.nightAt(rf);
     // Gone by the time the ridge is dark; it has set into the cloud by then.
-    var a = dayA * (1 - night) * (1 - U.smoothstep(78, 92, rf));
+    var a = dayA * (1 - night) * (1 - U.smoothstep(104, 122, rf));
     if (a <= 0.01) return;
     var k = sunDrop(rf);
     var x = 428 + 36 * k;
@@ -307,7 +307,7 @@
     var dusk = SITF.Parallax.duskAt(rf);
     var night = SITF.Parallax.nightAt(rf);
     var wDay = 1 - dusk, wDusk = dusk * (1 - night), wNight = night;
-    var d = Math.max(0, (rf - 54) * C.ROW_H);
+    var d = Math.max(0, (rf - 66) * C.ROW_H);
 
     ctx.save();
     var seaTop = C.H;
@@ -330,7 +330,7 @@
     // grows toward the summit.
     if (seaTop < C.H && d > 0) {
       var sunK = sunDrop(rf);
-      var sunA = a * wDusk * (1 - U.smoothstep(78, 92, rf)) * U.smoothstep(0.5, 0.9, sunK);
+      var sunA = a * wDusk * (1 - U.smoothstep(104, 122, rf)) * U.smoothstep(0.5, 0.9, sunK);
       if (sunA > 0.01) glow(ctx, 428 + 36 * sunK, seaTop + 22, 150, '#ff9a5c', 0.28 * sunA);
       var auroraA = a * wNight * (0.4 + 0.6 * summitNear(rf));
       if (auroraA > 0.01) {
