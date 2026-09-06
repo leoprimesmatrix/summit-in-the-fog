@@ -124,7 +124,12 @@
         }
 
         // Crumbling ledge: never two rows running, never the only way up.
-        if (footholds.length === 1 && !lastWasCrumble && rng() < zone.crumbleChance) {
+        // A snow bridge is the same trap wearing an honest face, so it is
+        // only ever set on a row that offers a second way.
+        if (footholds.length > 1 && rng() < (zone.bridgeChance || 0)) {
+          footholds[rng() < 0.5 ? 0 : 1].type = 'bridge';
+          lastWasCrumble = false;
+        } else if (footholds.length === 1 && !lastWasCrumble && rng() < zone.crumbleChance) {
           footholds[0].type = 'crumble';
           lastWasCrumble = true;
         } else {
@@ -212,7 +217,11 @@
   };
 
   M.arm = function (f) {
-    if (f.type !== 'crumble' || f.state !== 'ok') return;
+    if (f.state !== 'ok') return;
+    // A snow bridge looks like rock right up until it is under your weight,
+    // and then it does not hold. It is the glacier's own lie.
+    if (f.type === 'bridge') { f.state = 'armed'; f.timer = C.BRIDGE_DELAY; return; }
+    if (f.type !== 'crumble') return;
     f.state = 'armed';
     f.timer = C.CRUMBLE_DELAY;
   };

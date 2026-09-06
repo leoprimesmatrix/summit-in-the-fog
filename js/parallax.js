@@ -121,17 +121,66 @@
     P.drawNightPeaks(ctx, climbPx, alpha);
   };
 
+  // The forest you start in (nature_4), sinking away as you climb out of it.
+  P.drawForest = function (ctx, climbPx, t, alpha) {
+    if (alpha <= 0) return;
+    ctx.save();
+    ctx.globalAlpha = alpha;
+
+    var sky = img('sky4');
+    if (sky) ctx.drawImage(sky, 0, 0);
+    else { ctx.fillStyle = C.COLORS.sky; ctx.fillRect(0, 0, C.W, C.H); }
+
+    drawFull(ctx, img('cloud4'), Math.sin(t * 0.06) * 12, climbPx * 0.05, 0.9 * alpha);
+    drawFull(ctx, img('hill4'), 0, climbPx * 0.26, alpha);
+    drawFull(ctx, img('tree4'), 0, climbPx * 0.62, alpha);
+
+    ctx.restore();
+  };
+
+  // How much of each backdrop is showing at a given row.
+  P.forestAt = function (rowFloat) { return 1 - U.smoothstep(12, 30, rowFloat); };
+
   // How dusky / how nocturnal the sky is for a given row.
-  P.duskAt = function (rowFloat) { return U.smoothstep(44, 56, rowFloat); };
-  P.nightAt = function (rowFloat) { return U.smoothstep(96, 106, rowFloat); };
+  P.duskAt = function (rowFloat) { return U.smoothstep(56, 74, rowFloat); };
+  P.nightAt = function (rowFloat) { return U.smoothstep(112, 128, rowFloat); };
+
+  // A colour cast per stage, so the glacier is cold and the ridge is not.
+  // Kept light: the backdrop art and the sky do most of the work.
+  var GRADE = [
+    null,
+    null,
+    { color: '#7fc7ff', a: 0.16 },   // the glacier: everything goes blue
+    { color: '#8e7fd0', a: 0.12 },   // the ridge at dusk
+    { color: '#2b4a7a', a: 0.10 }    // the death zone
+  ];
+
+  P.grade = function (ctx, rowFloat) {
+    var i = U.zoneIndexOf(Math.floor(U.clamp(rowFloat, 0, C.ROWS)));
+    var g = GRADE[U.clamp(i, 0, GRADE.length - 1)];
+    // Blend toward the next stage's cast so it arrives gradually.
+    var z = C.ZONES[i], t = 0, gn = null;
+    if (i < C.ZONES.length - 1 && rowFloat > z.to - 8) {
+      t = U.clamp((rowFloat - (z.to - 8)) / 10, 0, 1);
+      gn = GRADE[i + 1];
+    }
+    ctx.save();
+    if (g) { ctx.globalAlpha = g.a * (1 - t); ctx.fillStyle = g.color; ctx.fillRect(0, 0, C.W, C.H); }
+    if (gn) { ctx.globalAlpha = gn.a * t; ctx.fillStyle = gn.color; ctx.fillRect(0, 0, C.W, C.H); }
+    ctx.restore();
+  };
 
   // Full background for gameplay at a given row + camera offset.
   P.draw = function (ctx, rowFloat, climbPx, t) {
     var dusk = P.duskAt(rowFloat);
     var night = P.nightAt(rowFloat);
 
+    var forest = P.forestAt(rowFloat);
+    if (forest > 0) P.drawForest(ctx, climbPx, t, 1);
+
     if (night < 1) {
-      P.drawDay(ctx, climbPx, t, 1, rowFloat);
+      // The alpine stack fades in over the forest as you climb out of it.
+      P.drawDay(ctx, climbPx, t, 1 - forest, rowFloat);
       if (dusk > 0) {
         ctx.save();
         ctx.globalAlpha = 0.38 * dusk;
@@ -145,6 +194,9 @@
     // The cloud deck sits in front of both stacks: it is nearer than any
     // of the painted mountains once you are above it.
     SITF.Sky.drawClouds(ctx, rowFloat, t);
+
+    // Finally the stage's own light on all of it.
+    P.grade(ctx, rowFloat);
   };
 
   // Fog tint follows the light: cool white by day, grey-blue on the ridge,

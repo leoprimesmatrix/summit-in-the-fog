@@ -217,7 +217,7 @@
     if (climber.state === 'idle' || climber.state === 'recover') {
       var rate = atShelter() ? C.BREATH_REST_CAIRN : C.BREATH_REST;
       // You only recover while you are genuinely standing, not mid-chain.
-      if (climber.idleTime > 0.25) run.breath = Math.min(1, run.breath + rate * dt);
+      if (climber.idleTime > 0.15) run.breath = Math.min(1, run.breath + rate * dt);
     }
     if (run.breath < C.BREATH_LOW && !run.gasping) {
       run.gasping = true;
@@ -403,10 +403,22 @@
           life: 0.5, r: 30, w: 1, grow: 1, color: COL.accent, alpha: 0.7, layer: 'screen'
         });
       }
-      if (fh && fh.type === 'crumble' && fh.state === 'ok') {
+      if (fh && (fh.type === 'crumble' || fh.type === 'bridge') && fh.state === 'ok') {
         M.arm(fh);
-        Aud.play('sfx_crumble', { volume: 0.6 });
-        addShake(1, 0.15);
+        if (fh.type === 'bridge') {
+          // It gave under you: a crack, a lurch, and very little time.
+          Aud.play('sfx_bridge_crack', { volume: 0.7 });
+          addShake(2, 0.2);
+          setToast('SNOW BRIDGE', 0.9);
+          for (var bi = 0; bi < 10; bi++) {
+            Part.spawn('debris', p.x - 16 + Math.random() * 32, sy + 4,
+                       { vx: (Math.random() - 0.5) * 40, vy: 20 + Math.random() * 50,
+                         life: 0.7, w: 1, h: 1, color: COL.snow, alpha: 0.9, layer: 'screen' });
+          }
+        } else {
+          Aud.play('sfx_crumble', { volume: 0.6 });
+          addShake(1, 0.15);
+        }
       }
       if (row.cairn && !row.cairn.lit) lightCairn(row);
       if (row.summit) reachSummit();
@@ -1571,13 +1583,27 @@
       ctx.restore();
     }
 
-    // Zone banner: slides down and settles, then fades.
+    // Zone banner: slides down and settles, then fades. Crossing into a new
+    // stage briefly letterboxes the view, so arriving somewhere reads as an
+    // event rather than a caption.
     if (banner.t > 0) {
       var life = banner.dur - banner.t;
       var ba = Math.min(1, banner.t / 0.5) * Math.min(1, life / 0.25);
       var slide = Math.round((1 - U.easeOutCubic(Math.min(1, life / 0.35))) * -8);
       var bw = Font.width(banner.text, 2);
       var by = 36 + slide;
+
+      var barH = Math.round(16 * ba);
+      if (barH > 0) {
+        ctx.save();
+        ctx.globalAlpha = 0.55 * ba;
+        ctx.fillStyle = '#000000';
+        ctx.fillRect(0, 0, C.W, barH);
+        ctx.fillRect(0, C.H - barH, C.W, barH);
+        ctx.restore();
+      }
+      Font.draw(ctx, M.altitudeOf(climber.row) + ' M', C.W / 2, by + 24,
+                { scale: 1, align: 'center', color: COL.textDim, shadow: COL.ink, alpha: ba * 0.9 });
       U.softPanel(ctx, C.W / 2 - bw / 2 - 16, by - 6, bw + 32, 28, 0.45 * ba);
       ctx.save();
       ctx.globalAlpha = ba;

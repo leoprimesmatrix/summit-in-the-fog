@@ -215,13 +215,17 @@
 
   var LEDGE_TOP_PAD = 2;
 
-  // Per-zone rock palettes: warm sandstone in the treeline, cold grey on the
-  // ridge, blue ice near the summit. Snow gets thicker the higher you go.
+  // Per-stage rock palettes: mossy granite at the camp, warm sandstone in the
+  // treeline, blue ice on the glacier, cold grey gneiss on the ridge, and
+  // black rock under rime in the death zone. Snow thickens as you climb.
   var LEDGE_PAL = [
+    { n: '#eef4f8', m: '#c4d4dd', a: '#a8b294', b: '#7f8a69', c: '#4f5844', k: '#2f3529', g: '#5f8a3a', G: '#3f6428', x: '#7e9a52' },
     { n: '#f2f7fb', m: '#c9dbe8', a: '#d1b892', b: '#a98d6b', c: '#6b5a4a', k: '#3d332b', g: '#5f8a3a', G: '#3f6428', x: '#7e9a52' },
+    { n: '#f7fbff', m: '#cfe3f2', a: '#d6ecf7', b: '#9fc4dc', c: '#587a92', k: '#35516a', g: '#e8f4fb', G: '#a9d0e6', x: '#bfe0f0' },
     { n: '#f2f7fb', m: '#c9dbe8', a: '#b9bcc4', b: '#8d8f96', c: '#565a63', k: '#33363d', g: '#6f7a86', G: '#4d5560', x: '#9aa4ae' },
-    { n: '#f7fbff', m: '#cfe3f2', a: '#d6ecf7', b: '#9fc4dc', c: '#587a92', k: '#35516a', g: '#e8f4fb', G: '#a9d0e6', x: '#bfe0f0' }
+    { n: '#ffffff', m: '#dbe8f2', a: '#8f9aa8', b: '#69737f', c: '#3c434d', k: '#22262c', g: '#dbe8f2', G: '#9fb2c2', x: '#c2d4e2' }
   ];
+  var LEDGE_ZONES = LEDGE_PAL.length;
 
   function ledgeRows(zone, cracked, seed) {
     var rnd = U.mulberry32(seed);
@@ -253,7 +257,7 @@
       if (rnd() < 0.08) set(sx, 8 + Math.floor(rnd() * 2), 'k');
     }
 
-    if (zone === 0) {
+    if (zone <= 1) {
       // Grass tufts poke through the thin snow, moss clings to the face.
       for (var gx = 3; gx < 35; gx += 1) {
         if (rnd() < 0.22) {
@@ -265,7 +269,7 @@
       for (var mx = 1; mx < 37; mx++) {
         if (rnd() < 0.12) { set(mx, 6 + Math.floor(rnd() * 3), 'G'); }
       }
-    } else if (zone === 1) {
+    } else if (zone === 3) {
       // Windblown snow piles on one side; lichen specks on the stone.
       var pile = rnd() < 0.5 ? 4 : 30;
       for (var px = 0; px < 6; px++) {
@@ -525,7 +529,7 @@
 
     S.img.ledge = [];
     S.img.ledge_crumble = [];
-    for (var z = 0; z < 3; z++) {
+    for (var z = 0; z < LEDGE_ZONES; z++) {
       // Two variants per zone so neighbouring ledges do not repeat exactly.
       S.img.ledge.push([make(ledgeRows(z, false, 100 + z), LEDGE_PAL[z]),
                         make(ledgeRows(z, false, 200 + z), LEDGE_PAL[z])]);
@@ -582,7 +586,7 @@
       ctx.drawImage(img, Math.round(x - img.width / 2), Math.round(y));
       return;
     }
-    var z = U.clamp(zone == null ? 0 : zone, 0, 2);
+    var z = U.clamp(zone == null ? 0 : zone, 0, LEDGE_ZONES - 1);
     var set = (type === 'crumble') ? S.img.ledge_crumble[z] : S.img.ledge[z];
     img = set[(variant || 0) % set.length];
     var dx = Math.round(x - S.LEDGE_W / 2 + (shakeX || 0));
