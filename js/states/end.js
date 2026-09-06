@@ -9,7 +9,7 @@
   var Aud = SITF.Audio;
   var COL = C.COLORS;
 
-  var data, t, best, isRecord, inputDelay, snowAcc;
+  var data, t, best, isRecord, inputDelay, snowAcc, bestScore, isScoreRecord;
 
   var End = {};
 
@@ -37,6 +37,13 @@
       best = prev;
     }
 
+    // Best score counts on any run, summit or not.
+    var ps = parseFloat(U.storageGet(C.STORAGE_KEY_SCORE));
+    if (!isFinite(ps)) ps = 0;
+    var sc = data.score || 0;
+    isScoreRecord = sc > ps;
+    bestScore = Math.max(ps, sc);
+    if (isScoreRecord) U.storageSet(C.STORAGE_KEY_SCORE, String(sc));
   };
 
   End.exit = function () {};
@@ -97,18 +104,21 @@
               { scale: 2, align: 'center', color: COL.text, shadow: COL.ink });
 
     var rows = [
-      ['TIME', U.formatTime(data.time)],
+      ['TIME', U.formatTime(data.time) + (isRecord ? '  NEW BEST' : '')],
+      ['TIME BONUS', '+' + (data.timeBonus || 0)],
+      ['BLIND HOPS', String(data.blind || 0)],
+      ['CRYSTALS', String(data.crystals || 0)],
       ['SLIPS', String(data.slips)],
-      ['BEST COMBO', 'X' + data.bestCombo],
-      ['BEST TIME', U.formatTime(best)]
+      ['BEST COMBO', 'X' + data.bestCombo]
     ];
-    drawResults(ctx, rows, 124);
+    drawResults(ctx, rows, 108);
 
-    if (isRecord) {
-      var pulse = 0.6 + 0.4 * Math.sin(t * 5);
-      Font.draw(ctx, 'NEW BEST!', C.W / 2, 200,
-                { scale: 2, align: 'center', color: COL.warn, shadow: COL.ink, alpha: pulse });
-    }
+    var pulse = 0.6 + 0.4 * Math.sin(t * 5);
+    Font.draw(ctx, 'SCORE ' + (data.score || 0), C.W / 2, 212,
+              { scale: 2, align: 'center', color: isScoreRecord ? COL.warn : COL.text, shadow: COL.ink,
+                alpha: isScoreRecord ? pulse : 1 });
+    Font.draw(ctx, (isScoreRecord ? 'NEW BEST SCORE' : 'BEST ' + bestScore), C.W / 2, 234,
+              { scale: 1, align: 'center', color: COL.textDim, shadow: COL.ink });
 
     drawFooter(ctx, 'ENTER  CLIMB AGAIN', 'ESC  TITLE');
   }
@@ -127,7 +137,7 @@
     }
     ctx.restore();
 
-    U.panel(ctx, 78, 44, C.W - 156, 200, COL.ink, 0.88);
+    U.panel(ctx, 78, 40, C.W - 156, 210, COL.ink, 0.88);
 
     Font.draw(ctx, 'LOST IN THE', C.W / 2, 62,
               { scale: 2, align: 'center', color: COL.text });
@@ -137,13 +147,15 @@
               { scale: 1, align: 'center', color: COL.warn });
 
     var rows = [
-      ['TIME', U.formatTime(data.time)],
+      ['SCORE', String(data.score || 0) + (isScoreRecord ? '  NEW BEST' : '')],
+      ['BLIND HOPS', String(data.blind || 0)],
+      ['CRYSTALS', String(data.crystals || 0)],
       ['SLIPS', String(data.slips)],
       ['BEST COMBO', 'X' + data.bestCombo]
     ];
-    drawResults(ctx, rows, 134);
+    drawResults(ctx, rows, 126);
 
-    Font.draw(ctx, 'LIGHT CAIRNS TO PUSH THE WHITEOUT BACK.', C.W / 2, 210,
+    Font.draw(ctx, 'LIGHT CAIRNS TO PUSH THE WHITEOUT BACK.', C.W / 2, 216,
               { scale: 1, align: 'center', color: COL.textDim });
 
     drawFooter(ctx, 'ENTER  TRY AGAIN', 'ESC  TITLE');

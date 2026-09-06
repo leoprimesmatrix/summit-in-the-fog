@@ -196,11 +196,11 @@
     Font.draw(ctx, 'OR A W D   HOP TO THE NEXT LEDGE', ax + 40, cy + 1,
               { scale: 1, color: COL.text });
 
-    Font.draw(ctx, 'GUSTS REVEAL THE PATH. HOP FROM MEMORY.', C.W / 2, cy + 24,
+    Font.draw(ctx, 'GUSTS REVEAL THE PATH. HOP FROM MEMORY FOR BONUS.', C.W / 2, cy + 24,
               { scale: 1, align: 'center', color: COL.textDim });
-    Font.draw(ctx, 'LIGHT CAIRNS TO SAVE YOUR CLIMB.', C.W / 2, cy + 38,
+    Font.draw(ctx, 'S / DOWN  FIRE A FLARE TO SEE AHEAD. CRYSTALS REFILL.', C.W / 2, cy + 38,
               { scale: 1, align: 'center', color: COL.textDim });
-    Font.draw(ctx, 'OUTRUN THE WHITEOUT BELOW.', C.W / 2, cy + 52,
+    Font.draw(ctx, 'CAIRNS SAVE YOUR CLIMB. OUTRUN THE WHITEOUT.', C.W / 2, cy + 52,
               { scale: 1, align: 'center', color: COL.textDim });
   }
 

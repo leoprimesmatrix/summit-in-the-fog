@@ -72,6 +72,7 @@
     F.globalReveal = 0;
     F.blowing = false;
     F.surge = 0;
+    F.flareActive = false;
   };
 
   F.addClearing = function (row, lane) {
@@ -85,6 +86,17 @@
   F.blowAway = function () { F.blowing = true; };
 
   F.isGusting = function () { return F.gustProgress >= 0; };
+
+  // A flare: the player buys a reveal right now. Reuses the gust wipe so it
+  // feels like the same weather, only on demand. Fails if wind is already up.
+  F.fireFlare = function (rows) {
+    if (F.gustProgress >= 0 || F.blowing) return false;
+    F.gustPending = false;
+    F.gustReveal = rows;
+    F.gustProgress = 0;
+    F.flareActive = true;
+    return true;
+  };
 
   // Seconds until the next gust actually starts revealing.
   F.timeToGust = function () {
@@ -104,7 +116,9 @@
       F.gustProgress += dt / C.GUST_DURATION;
       if (F.gustProgress >= 1) {
         F.gustProgress = -1;
-        F.gustTimer = zone.gustInterval;
+        // A flare does not delay the natural wind; a real gust does.
+        if (!F.flareActive) F.gustTimer = zone.gustInterval;
+        F.flareActive = false;
       }
       return;
     }

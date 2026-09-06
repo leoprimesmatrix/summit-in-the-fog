@@ -366,6 +366,33 @@
     S.img.arrow_l = make(ARROW_L, pal);
     S.img.arrow_r = make(ARROW_R, pal);
     S.img.arrow_u = make(ARROW_U, pal);
+
+    S.img.crystal = make([
+      '..w..',
+      '.waa.',
+      'waaab',
+      'waabb',
+      '.abb.',
+      '..b..'
+    ], { 'w': '#ffffff', 'a': COL.accent, 'b': '#1e9c86' });
+    S.img.flare = make([
+      '..f..',
+      '.fyf.',
+      '.fyf.',
+      'fyyyf',
+      'fyyyf',
+      '.fff.',
+      '..d..'
+    ], { 'f': COL.warn, 'y': '#fff1b8', 'd': COL.rockDark });
+    S.img.flare_empty = make([
+      '..d..',
+      '.d.d.',
+      '.d.d.',
+      'd...d',
+      'd...d',
+      '.ddd.',
+      '..d..'
+    ], { 'd': COL.textDim });
   };
 
   // ---- draw helpers -------------------------------------------------------

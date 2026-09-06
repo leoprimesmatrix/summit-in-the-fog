@@ -9,7 +9,7 @@
   };
 
   function makeFoothold(lane, type) {
-    return { lane: lane, type: type, state: 'ok', timer: 0, debris: 0 };
+    return { lane: lane, type: type, state: 'ok', timer: 0, debris: 0, crystal: false };
   }
 
   // Lanes reachable from every lane in `prev` with a single one-lane step.
@@ -79,8 +79,14 @@
           });
           if (cands.length > 0) {
             var extra = cands[Math.floor(rng() * cands.length) % cands.length];
-            footholds.push(makeFoothold(extra, 'rock'));
+            var mercy = makeFoothold(extra, 'rock');
+            // The tempting lane: the spare ledge carries a crystal more often.
+            if (rng() < 0.6) mercy.crystal = true;
+            footholds.push(mercy);
           }
+        }
+        if (!footholds[0].crystal && footholds.length === 1 && rng() < zone.crystalChance) {
+          footholds[0].crystal = true;
         }
 
         // Crumbling ledge: never two rows in a row, never on a mercy row.

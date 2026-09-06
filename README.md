@@ -33,7 +33,16 @@ lanes. **Fog hides every ledge above you.** You have three ways to find the way:
   checkpoint, clear a lasting patch of fog around it, and shove the whiteout
   back down the mountain.
 
-Hop into empty fog and you slip, losing two rows and your combo. Higher up the
+- **Flares.** Press S or Down to fire one: the fog parts for the next five ledges
+  right now, on your terms. You start with two and carry at most three. Cairns
+  refill them; so do the crystals scattered up the route, often sitting on the
+  riskier of two ledges.
+
+Hop into empty fog and you slip, losing two rows and your combo.
+
+**Scoring.** Every ledge pays, combos multiply it, and a hop onto a ledge you
+could not see pays a blind bonus. Crystals, cairns and the summit add more, and
+a fast summit earns a time bonus. Best score is saved alongside best time. Higher up the
 gusts come rarer and show less, some ledges crumble under you moments after you
 land, and the whiteout climbs faster.
 
@@ -46,6 +55,7 @@ land, and the whiteout climbs faster.
 | Right / D | Hop up-right |
 | Enter | Confirm |
 | Esc or P | Pause |
+| S or Down | Fire a flare |
 | M | Mute |
 | R | Restart (while paused) |
 | Q | Back to the title (while paused) |

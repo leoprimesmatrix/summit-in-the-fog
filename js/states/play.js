@@ -11,7 +11,7 @@
   var Aud = SITF.Audio;
   var COL = C.COLORS;
 
-  var climber, run, camera, shake, banner, toast, snowAcc, wispAcc, endSeq;
+  var climber, run, camera, shake, banner, toast, snowAcc, wispAcc, endSeq, floats, milestone;
 
   var Play = {};
 
@@ -71,8 +71,11 @@
     run = {
       time: 0, slips: 0, combo: 0, bestCombo: 0, lastLandTime: -99,
       checkpointRow: 0, started: false, paused: false, over: false, zone: 0,
-      settings: false
+      settings: false,
+      score: 0, flares: C.FLARE_START, crystals: 0, blind: 0, timeBonus: 0
     };
+    floats = [];
+    milestone = C.ALT_BASE_M + C.MILESTONE_M;
     camera = { y: rowY(0) };
     shake = { t: 0, mag: 0 };
     banner = { text: C.ZONES[0].name, t: 2.4 };
@@ -97,7 +100,8 @@
       row: climber.row, lane: climber.lane, mode: climber.state,
       rowFloat: climberRowFloat(), time: run.time, slips: run.slips,
       combo: run.combo, bestCombo: run.bestCombo, checkpoint: run.checkpointRow,
-      over: run.over, paused: run.paused, zone: run.zone, frontRow: F.frontRow
+      over: run.over, paused: run.paused, zone: run.zone, frontRow: F.frontRow,
+      score: run.score, flares: run.flares, crystals: run.crystals, blind: run.blind
     };
   };
 
@@ -122,6 +126,33 @@
     }
   };
 
+  // --- feedback ----------------------------------------------------------
+
+  function addFloat(text, x, worldY, color) {
+    floats.push({ text: text, x: x, y: worldY, t: 0, color: color || COL.text });
+  }
+
+  function addScore(n, label, color) {
+    run.score += n;
+    var p = climberPos();
+    addFloat((label ? label + ' ' : '') + '+' + n, p.x, p.y - 22, color);
+  }
+
+  function fireFlare() {
+    if (run.flares <= 0) { toast = { text: 'NO FLARES', t: 0.8 }; return; }
+    if (!F.fireFlare(C.FLARE_REVEAL)) return;
+    run.flares--;
+    Aud.play('sfx_gust', { volume: 0.7, rate: 1.35 });
+    var p = climberPos(), sy = toScreenY(p.y);
+    for (var i = 0; i < 22; i++) {
+      Part.spawn('sparkle', p.x - 4 + Math.random() * 8, sy - 14, {
+        vx: (Math.random() - 0.5) * 90, vy: -60 - Math.random() * 90,
+        life: 0.5 + Math.random() * 0.5, w: 1, h: 1,
+        color: Math.random() < 0.5 ? COL.warn : '#fff1b8', alpha: 1, layer: 'screen'
+      });
+    }
+  }
+
   // --- movement ------------------------------------------------------------
 
   function attemptHop(dir) {
@@ -141,6 +172,8 @@
     var fh = inRange ? M.footholdAt(targetRow, targetLane) : null;
 
     if (fh) {
+      // A blind hop: the target ledge was hidden when the player committed.
+      climber.blindHop = targetRow > 1 && revealAlpha(targetRow, laneX(fh.lane)) < 0.15;
       climber.targetLane = (fh.type === 'start') ? targetLane : fh.lane;
       climber.toX = laneX(climber.targetLane);
       climber.toY = rowY(targetRow);
@@ -217,9 +250,39 @@
       });
     }
 
+    // Score: every ledge pays, combos multiply, hidden ledges pay extra.
+    run.score += C.SCORE_HOP * Math.min(5, Math.max(1, run.combo));
+    if (climber.blindHop) {
+      run.blind++;
+      addScore(C.SCORE_BLIND, 'BLIND', COL.accent);
+    }
+    climber.blindHop = false;
+
+    // Altitude milestones.
+    var altNow = M.altitudeOf(climber.row);
+    if (altNow >= milestone) {
+      toast = { text: milestone + ' M', t: 1.3 };
+      milestone += C.MILESTONE_M;
+    }
+
     var row = M.row(climber.row);
     if (row) {
       var fh = M.footholdAt(climber.row, climber.lane);
+      if (fh && fh.crystal) {
+        fh.crystal = false;
+        run.crystals++;
+        var gained = run.flares < C.FLARES_MAX;
+        if (gained) run.flares++;
+        addScore(C.SCORE_CRYSTAL, gained ? '+1 FLARE' : 'CRYSTAL', COL.accent);
+        Aud.play('sfx_cairn', { volume: 0.7, rate: 1.25 });
+        var cp = climberPos(), csy = toScreenY(cp.y);
+        for (var ci = 0; ci < 10; ci++) {
+          Part.spawn('sparkle', cp.x - 6 + Math.random() * 12, csy - 8 - Math.random() * 8, {
+            vx: (Math.random() - 0.5) * 40, vy: -30 - Math.random() * 30,
+            life: 0.5 + Math.random() * 0.4, w: 1, h: 1, color: COL.accent, alpha: 1, layer: 'screen'
+          });
+        }
+      }
       if (fh && fh.type === 'crumble' && fh.state === 'ok') {
         M.arm(fh);
         Aud.play('sfx_crumble', { volume: 0.6 });
@@ -243,7 +306,9 @@
     F.addClearing(row.index, climber.lane);
     F.pushWhiteout();
     Aud.play('sfx_cairn', { volume: 0.9 });
-    toast = { text: 'CHECKPOINT', t: 1.4 };
+    run.flares = C.FLARES_MAX;
+    run.score += C.SCORE_CAIRN;
+    toast = { text: 'CHECKPOINT - FLARES REFILLED', t: 1.6 };
 
     var p = climberPos();
     var sy = toScreenY(p.y);
@@ -262,6 +327,9 @@
     endSeq = { active: true, kind: 'summit', t: 0 };
     climber.state = 'summit';
     run.over = true;
+    run.score += C.SCORE_SUMMIT;
+    run.timeBonus = Math.max(0, Math.round((C.SCORE_TIME_PAR - run.time) * C.SCORE_TIME_BONUS_PER_SEC));
+    run.score += run.timeBonus;
     F.blowAway();
     Aud.ambient(0, 2.0);
     Aud.play('sfx_summit', { volume: 1 });
@@ -308,7 +376,8 @@
         if (endSeq.t > 2.6) {
           SITF.setState('end', {
             result: 'summit', time: run.time, slips: run.slips,
-            bestCombo: run.bestCombo, row: climber.row
+            bestCombo: run.bestCombo, row: climber.row,
+            score: run.score, timeBonus: run.timeBonus, blind: run.blind, crystals: run.crystals
           });
           endSeq.active = false;
         }
@@ -317,7 +386,8 @@
         if (endSeq.t > 1.5) {
           SITF.setState('end', {
             result: 'whiteout', time: run.time, slips: run.slips,
-            bestCombo: run.bestCombo, row: climber.row
+            bestCombo: run.bestCombo, row: climber.row,
+            score: run.score, blind: run.blind, crystals: run.crystals
           });
           endSeq.active = false;
         }
@@ -362,6 +432,11 @@
     if (shake.t > 0) shake.t -= dt;
     if (banner.t > 0) banner.t -= dt;
     if (toast.t > 0) toast.t -= dt;
+    for (var fi = floats.length - 1; fi >= 0; fi--) {
+      floats[fi].t += dt;
+      floats[fi].y -= 22 * dt;
+      if (floats[fi].t > 1.1) floats.splice(fi, 1);
+    }
 
     var rowsData = M.rows;
     for (var r = 0; r < rowsData.length; r++) {
@@ -471,6 +546,10 @@
       var a = acts[i];
       if (a === 'mute') { Aud.toggleMuted(); continue; }
       if (run.over) continue;
+      if ((a === 'down' || a === 'settings') && !run.paused && !run.over) {
+        fireFlare();
+        continue;
+      }
       if (a === 'settings' && run.paused) {
         Aud.ui();
         run.settings = true;
@@ -568,6 +647,27 @@
 
     Part.draw(ctx, 'screen');
     F.drawWhiteout(ctx, toScreenY(rowY(F.frontRow)) + 6);
+
+    // Floating score text.
+    for (var fl = 0; fl < floats.length; fl++) {
+      var ft = floats[fl];
+      var fa = ft.t < 0.8 ? 1 : 1 - (ft.t - 0.8) / 0.3;
+      Font.draw(ctx, ft.text, ft.x, toScreenY(ft.y), { scale: 1, align: 'center', color: ft.color, shadow: COL.ink, alpha: fa });
+    }
+
+    // Danger: the whiteout is close. The bottom of the screen pulses cold white.
+    var gapRows = rf - F.frontRow;
+    if (gapRows < C.DANGER_ROWS && !run.over) {
+      var danger = U.clamp(1 - gapRows / C.DANGER_ROWS, 0, 1);
+      var pulse = 0.5 + 0.5 * Math.sin(SITF.time * (6 + danger * 8));
+      ctx.save();
+      var dg = ctx.createLinearGradient(0, C.H, 0, C.H * 0.45);
+      dg.addColorStop(0, U.rgba(COL.whiteout, 0.55 * danger * (0.6 + 0.4 * pulse)));
+      dg.addColorStop(1, U.rgba(COL.whiteout, 0));
+      ctx.fillStyle = dg;
+      ctx.fillRect(0, 0, C.W, C.H);
+      ctx.restore();
+    }
 
     drawHUD(ctx, rf);
 
@@ -673,6 +773,11 @@
         } else {
           S.drawLedge(ctx, x, y, f.type, jitter, darken);
         }
+        if (f.crystal) {
+          var bobC = Math.round(Math.sin(SITF.time * 3 + r) * 1.5);
+          S.drawGlow(ctx, S.img.glow_cairn, x, y - 6 + bobC, 0.35, 0.6);
+          ctx.drawImage(S.img.crystal, Math.round(x - 2), Math.round(y - 9 + bobC));
+        }
       }
 
       if (row.cairn) {
@@ -725,6 +830,14 @@
     Font.draw(ctx, 'ALT ' + alt + ' M', 8, 8, { scale: 1, color: COL.text, shadow: COL.ink });
     Font.draw(ctx, U.formatTime(run.time), C.W - 44, 8,
               { scale: 1, color: COL.text, shadow: COL.ink, align: 'right' });
+    Font.draw(ctx, String(run.score), C.W - 44, 20,
+              { scale: 1, color: COL.accent, shadow: COL.ink, align: 'right' });
+
+    // Flares in hand.
+    for (var fi2 = 0; fi2 < C.FLARES_MAX; fi2++) {
+      ctx.drawImage(fi2 < run.flares ? S.img.flare : S.img.flare_empty, 8 + fi2 * 8, 20);
+    }
+    Font.draw(ctx, 'FLARE  S', 8 + C.FLARES_MAX * 8 + 4, 20, { scale: 1, color: COL.textDim, shadow: COL.ink });
 
     // Gust anticipation: three lines that pulse just before the wind arrives.
     var tg = F.timeToGust();
