@@ -169,8 +169,18 @@
 
   var amb = { el: null, vol: 0, target: 0, rate: 0, base: 0 };
 
+  // The wind bed is off. Callers still drive it, so re-enabling it is a
+  // matter of dropping this early return.
+  A.ambientEnabled = false;
+
   A.ambient = function (target, fadeSec) {
     fadeSec = (fadeSec == null) ? 1.5 : fadeSec;
+    if (!A.ambientEnabled) {
+      if (amb.el && !amb.el.paused) amb.el.pause();
+      amb.base = 0; amb.target = 0; amb.vol = 0;
+      if (amb.el) amb.el.volume = 0;
+      return;
+    }
     if (!A.available['amb_wind']) return;
     amb.base = U.clamp(target, 0, 1);
     var goal = amb.base * VOL.ambient * A.musicVol;
