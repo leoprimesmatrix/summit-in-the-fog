@@ -12,6 +12,7 @@
   var COL = C.COLORS;
 
   var climber, run, camera, shake, banner, toast, snowAcc, wispAcc, leafAcc, moteAcc,
+      dustAcc, breathAcc,
       endSeq, milestone, echo, flash, cairnCount;
 
   var Play = {};
@@ -85,7 +86,7 @@
     shake = { t: 0, mag: 0 };
     banner = { text: C.ZONES[0].name, t: 2.4, dur: 2.4 };
     toast = { text: '', t: 0, dur: 1 };
-    snowAcc = 0; wispAcc = 0; leafAcc = 0; moteAcc = 0;
+    snowAcc = 0; wispAcc = 0; leafAcc = 0; moteAcc = 0; dustAcc = 0; breathAcc = 0;
     endSeq = { active: false, kind: '', t: 0 };
     cairnCount = 0;
     for (var r = 0; r < M.rows.length; r++) if (M.rows[r].cairn) cairnCount++;
@@ -654,6 +655,20 @@
       }
     }
 
+    // Daylight: fine dust drifts through the sunlight, catching the eye
+    // without competing with the fog above.
+    if (night <= 0) {
+      dustAcc += dt * 2.2;
+      while (dustAcc >= 1) {
+        dustAcc -= 1;
+        Part.spawn('mote', Math.random() * C.W, C.H * 0.35 + Math.random() * C.H * 0.5, {
+          vx: 6 + Math.random() * 10, vy: -3 - Math.random() * 5,
+          life: 5 + Math.random() * 3, w: 1, h: 1,
+          color: '#fff6d8', alpha: 0.30, layer: 'screen'
+        });
+      }
+    }
+
     // Under the aurora, motes of light drift up past the climber.
     if (night > 0) {
       moteAcc += dt * 2.5 * night;
@@ -675,6 +690,26 @@
         w: 24 + Math.floor(Math.random() * 20), h: 2 + Math.floor(Math.random() * 4),
         color: COL.fog, alpha: 0.22, layer: 'screen'
       });
+    }
+
+    // Above the treeline, the air is cold enough to see your own breath
+    // while you catch it standing still.
+    if (zi >= 1 && climber.state === 'idle' && climber.idleTime > 0.4) {
+      breathAcc += dt;
+      if (breathAcc > 1.1) {
+        breathAcc = 0;
+        var bp = climberPos(), bsy = toScreenY(bp.y);
+        var bx = bp.x + 4 * climber.facing;
+        for (var k = 0; k < 3; k++) {
+          Part.spawn('puff', bx + (Math.random() - 0.5) * 2, bsy - 12 - Math.random() * 2, {
+            vx: climber.facing * (4 + Math.random() * 6), vy: -6 - Math.random() * 6,
+            life: 0.6 + Math.random() * 0.3, w: 1, h: 1, grow: 2,
+            color: '#eef6fb', alpha: 0.4, layer: 'screen'
+          });
+        }
+      }
+    } else {
+      breathAcc = 0;
     }
   }
 
@@ -1041,6 +1076,18 @@
             var cf = 0.9 + 0.1 * Math.sin(SITF.time * 17) * Math.sin(SITF.time * 5.1);
             S.drawGlow(ctx, S.img.glow_cairn, cx, y - 10, (0.5 + 0.1 * Math.sin(SITF.time * 3)) * cf * (1 + 0.4 * night), 1.1);
             S.drawGlow(ctx, S.img.pool_cairn, cx, y + 1, 0.55 * cf, 1);
+
+            // A thin beacon rises off the checkpoint, a landmark you can
+            // spot from well below before the fog even starts to thin.
+            ctx.save();
+            ctx.globalCompositeOperation = 'lighter';
+            var beamTop = y - 260, beamW = 4 + Math.sin(SITF.time * 4) * 0.6;
+            var bg = ctx.createLinearGradient(0, beamTop, 0, y - 14);
+            bg.addColorStop(0, U.rgba(COL.lantern, 0));
+            bg.addColorStop(1, U.rgba(COL.lantern, 0.16 * cf));
+            ctx.fillStyle = bg;
+            ctx.fillRect(cx - beamW / 2, beamTop, beamW, y - 14 - beamTop);
+            ctx.restore();
           }
           S.drawCairn(ctx, cx, y, row.cairn.lit, pop, Math.floor(SITF.time * 6) % 2);
         }
