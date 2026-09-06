@@ -99,6 +99,43 @@
     return v;
   };
 
+  // --- world space -------------------------------------------------------
+  // World y is 0 at base camp and negative going up.
+  U.altOf = function (y) { return C.ALT_BASE_M - y * C.ALT_PER_PX_M; };
+  U.yOfAlt = function (m) { return -(m - C.ALT_BASE_M) / C.ALT_PER_PX_M; };
+
+  // The sky and parallax curves are written against a 0..180 scalar that
+  // used to be the row number. It is now just a unit of height, so those
+  // curves keep working without being rewritten.
+  U.rfOf = function (y) { return -y / C.SKY_ROW_PX; };
+
+  U.stageAt = function (altM) {
+    var Z = C.ZONES;
+    for (var i = 0; i < Z.length; i++) {
+      if (altM >= Z[i].fromM && altM < Z[i].toM) return i;
+    }
+    return altM < Z[0].fromM ? 0 : Z.length - 1;
+  };
+
+  U.stageOf = function (altM) { return C.ZONES[U.stageAt(altM)]; };
+
+  // A numeric stage field, cross-faded over `blend` metres at the border so
+  // density and speed shift gradually rather than stepping.
+  U.stageField = function (altM, field, blend) {
+    var Z = C.ZONES;
+    if (blend == null) blend = 160;
+    var i = U.stageAt(altM);
+    var z = Z[i];
+    var v = z[field];
+    if (i < Z.length - 1 && altM > z.toM - blend) {
+      v = U.lerp(v, Z[i + 1][field], U.clamp((altM - (z.toM - blend)) / blend, 0, 1));
+    }
+    if (i > 0 && altM < z.fromM + blend) {
+      v = U.lerp(v, Z[i - 1][field], U.clamp((z.fromM + blend - altM) / blend, 0, 1) * 0.5);
+    }
+    return v;
+  };
+
   // Parse '#rrggbb' or 'rgb(r,g,b)' -> [r,g,b], so mixed colours can be
   // fed back in and mixed again.
   U.hexToRgb = function (hex) {

@@ -957,7 +957,7 @@
     // Air over the painted range, then the face itself in front of it and
     // behind the fog: the same weather reveals both.
     Par.distanceHaze(ctx, rf);
-    SITF.RockFace.draw(ctx, toScreenY, rf);
+    SITF.RockFace.draw(ctx, { toScreenY: toScreenY, camY: camera.y });
 
     ctx.restore();
 

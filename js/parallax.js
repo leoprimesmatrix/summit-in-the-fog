@@ -111,7 +111,7 @@
   };
 
   P.nightPeaksY = function (climbPx) {
-    return U.clamp((climbPx - 100 * C.ROW_H) * 0.10 + 60, 0, 190);
+    return U.clamp((climbPx - 100 * C.SKY_ROW_PX) * 0.10 + 60, 0, 190);
   };
 
   // Aurora night stack (nature_6).

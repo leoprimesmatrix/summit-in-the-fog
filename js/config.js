@@ -16,6 +16,20 @@ SITF.Config = {
   CLIMBER_SCREEN_Y: 236,
   CAMERA_LERP: 0.12,
 
+  // --- the face --------------------------------------------------------
+  // The mountain is a solid mass with a real silhouette, described per
+  // world-y by one or two rock intervals. World y is 0 at base camp and
+  // negative going up, so the summit is at -WORLD_H.
+  WORLD_H: 5400,
+  PROFILE_STEP: 4,          // silhouette sampled every 4 px of height
+  BAND_H: 200,              // rock is baked in bands this tall
+  BAND_CACHE: 6,
+  ALT_PER_PX_M: 2 / 3,      // 5400 px of climbing = 3600 m
+  // Sky and parallax curves are written against a 0..180 scalar. Keeping
+  // that unit means every smoothstep in sky.js and parallax.js survives
+  // the rebuild untouched.
+  SKY_ROW_PX: 30,
+
   HOP_TIME: 0.18, HOP_ARC: 11,
   LEAP_TIME: 0.28, LEAP_ARC: 17,   // the two-lane hop: slower, higher, riskier
   LAND_SQUASH: 0.08,        // seconds the landing squash frame shows
@@ -37,11 +51,11 @@ SITF.Config = {
   // stormCalm/Build/Dur are the weather cycle in seconds; `wind` means a
   // storm shoves each hop a lane downwind; `breath` means thin air.
   ZONES: [
-    { name: 'BASE CAMP',  from: 0,   to: 19,  fogDensity: 0.78,  gustInterval: 4.0, revealRows: 9, whiteoutSpeed: 0.40, crumbleChance: 0.00, mercyChance: 0.30, forkChance: 0.30, leapChance: 0.10, gustDelay: 0, crystalChance: 0.10, stormCalm: 999, stormBuild: 6, stormDur: 0,  wind: false, breath: false },
-    { name: 'TREELINE',   from: 20,  to: 59,  fogDensity: 0.82, gustInterval: 4.5, revealRows: 7, whiteoutSpeed: 0.62, crumbleChance: 0.06, mercyChance: 0.22, forkChance: 0.32, leapChance: 0.18, gustDelay: 0, crystalChance: 0.14, stormCalm: 26,  stormBuild: 6, stormDur: 10, wind: false, breath: false },
-    { name: 'THE GLACIER',from: 60,  to: 99,  fogDensity: 0.85, gustInterval: 5.5, revealRows: 6, whiteoutSpeed: 0.72, crumbleChance: 0.14, mercyChance: 0.14, forkChance: 0.30, leapChance: 0.26, gustDelay: 0, crystalChance: 0.16, bridgeChance: 0.34, stormCalm: 23,  stormBuild: 6, stormDur: 12, wind: false, breath: false },
-    { name: 'THE RIDGE',  from: 100, to: 139, fogDensity: 0.87, gustInterval: 6.5, revealRows: 5, whiteoutSpeed: 0.82, crumbleChance: 0.20, mercyChance: 0.08, forkChance: 0.26, leapChance: 0.30, gustDelay: 0, crystalChance: 0.18, bridgeChance: 0.22, stormCalm: 21,  stormBuild: 6, stormDur: 13, wind: true,  breath: false },
-    { name: 'DEATH ZONE', from: 140, to: 180, fogDensity: 0.89, gustInterval: 8.0, revealRows: 3, whiteoutSpeed: 0.94, crumbleChance: 0.28, mercyChance: 0.00, forkChance: 0.20, leapChance: 0.34, gustDelay: 1.0, crystalChance: 0.22, bridgeChance: 0.16, stormCalm: 19,  stormBuild: 6, stormDur: 14, wind: true,  breath: true }
+    { name: 'BASE CAMP',  from: 0,   to: 19,  fromM: 1200, toM: 1600, fogCover: 0.35, whiteoutPx: 12.0, branchChance: 0.45,  fogDensity: 0.78,  gustInterval: 4.0, revealRows: 9, whiteoutSpeed: 0.40, crumbleChance: 0.00, mercyChance: 0.30, forkChance: 0.30, leapChance: 0.10, gustDelay: 0, crystalChance: 0.10, stormCalm: 999, stormBuild: 6, stormDur: 0,  wind: false, breath: false },
+    { name: 'TREELINE',   from: 20,  to: 59,  fromM: 1600, toM: 2400, fogCover: 0.40, whiteoutPx: 18.6, branchChance: 0.40,  fogDensity: 0.82, gustInterval: 4.5, revealRows: 7, whiteoutSpeed: 0.62, crumbleChance: 0.06, mercyChance: 0.22, forkChance: 0.32, leapChance: 0.18, gustDelay: 0, crystalChance: 0.14, stormCalm: 26,  stormBuild: 6, stormDur: 10, wind: false, breath: false },
+    { name: 'THE GLACIER',from: 60,  to: 99,  fromM: 2400, toM: 3200, fogCover: 0.45, whiteoutPx: 21.6, branchChance: 0.35,  fogDensity: 0.85, gustInterval: 5.5, revealRows: 6, whiteoutSpeed: 0.72, crumbleChance: 0.14, mercyChance: 0.14, forkChance: 0.30, leapChance: 0.26, gustDelay: 0, crystalChance: 0.16, bridgeChance: 0.34, stormCalm: 23,  stormBuild: 6, stormDur: 12, wind: false, breath: false },
+    { name: 'THE RIDGE',  from: 100, to: 139, fromM: 3200, toM: 4000, fogCover: 0.50, whiteoutPx: 24.6, branchChance: 0.30, fogDensity: 0.87, gustInterval: 6.5, revealRows: 5, whiteoutSpeed: 0.82, crumbleChance: 0.20, mercyChance: 0.08, forkChance: 0.26, leapChance: 0.30, gustDelay: 0, crystalChance: 0.18, bridgeChance: 0.22, stormCalm: 21,  stormBuild: 6, stormDur: 13, wind: true,  breath: false },
+    { name: 'DEATH ZONE', from: 140, to: 180, fromM: 4000, toM: 4800, fogCover: 0.55, whiteoutPx: 28.2, branchChance: 0.30, fogDensity: 0.89, gustInterval: 8.0, revealRows: 3, whiteoutSpeed: 0.94, crumbleChance: 0.28, mercyChance: 0.00, forkChance: 0.20, leapChance: 0.34, gustDelay: 1.0, crystalChance: 0.22, bridgeChance: 0.16, stormCalm: 19,  stormBuild: 6, stormDur: 14, wind: true,  breath: true }
   ],
 
   // Weather and thin air.

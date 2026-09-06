@@ -178,7 +178,11 @@
       SITF.Logo.build();
       SITF.Assets.load(function () {
         booted = true;
-        applyState('title', {});
+        // ?fly=1 opens the face flythrough instead of the game: the review
+        // pass for the mountain itself, with nothing drawn in front of it.
+        var fly = /[?&]fly=1/.test(window.location.search);
+        if (fly) SITF.Config.DEBUG = true;
+        applyState(fly ? 'fly' : 'title', {});
       });
     });
   }

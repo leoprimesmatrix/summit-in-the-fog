@@ -307,7 +307,7 @@
     var dusk = SITF.Parallax.duskAt(rf);
     var night = SITF.Parallax.nightAt(rf);
     var wDay = 1 - dusk, wDusk = dusk * (1 - night), wNight = night;
-    var d = Math.max(0, (rf - 66) * C.ROW_H);
+    var d = Math.max(0, (rf - 66) * C.SKY_ROW_PX);
 
     ctx.save();
     var seaTop = C.H;
