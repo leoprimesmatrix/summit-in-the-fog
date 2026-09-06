@@ -24,13 +24,21 @@
   }
 
   // Daytime alpine stack (nature_3). climbPx grows as the player ascends.
-  P.drawDay = function (ctx, climbPx, t, alpha) {
+  // `rf` is the climber's row; when given, the altitude sky (sun, dusk
+  // glow, first stars) is layered in. Screens without a climb omit it.
+  P.drawDay = function (ctx, climbPx, t, alpha, rf) {
     ctx.save();
     if (alpha != null) ctx.globalAlpha = alpha;
+    var a = alpha == null ? 1 : alpha;
 
     var sky = img('sky3');
     if (sky) ctx.drawImage(sky, 0, 0);
     else { ctx.fillStyle = C.COLORS.sky; ctx.fillRect(0, 0, C.W, C.H); }
+
+    if (rf != null) {
+      SITF.Sky.drawDuskStars(ctx, rf, t, a);
+      SITF.Sky.drawSun(ctx, rf, t, a);
+    }
 
     // The peak sinks slowly as you climb past it. Its source art is
     // transparent below GROUND_Y, so the ground colour is extended down to
@@ -42,6 +50,9 @@
       ctx.fillRect(0, Math.round(groundTop), C.W, C.H - Math.round(groundTop));
     }
     drawFull(ctx, img('peak3'), 0, peakY, 1);
+
+    // Alpenglow: the dusk horizon warms the peak but not the near trees.
+    if (rf != null) SITF.Sky.drawDuskGlow(ctx, rf);
 
     // Pale haze band, drifting.
     var hazeY = climbPx * 0.06 + Math.sin(t * 0.2) * 3;
@@ -56,7 +67,7 @@
 
   // Just the sky half of the night stack: stars and the drifting aurora.
   // Split out so the summit screen can build its own peaks over it.
-  P.drawNightSky = function (ctx, t, alpha) {
+  P.drawNightSky = function (ctx, t, alpha, rf) {
     if (alpha <= 0) return;
     ctx.save();
     ctx.globalAlpha = alpha;
@@ -67,12 +78,16 @@
 
     var aur = img('aurora6');
     if (aur) {
-      ctx.globalAlpha = alpha * (0.85 + 0.15 * Math.sin(t * 0.4));
+      // The aurora itself strengthens over the last zone.
+      var lift = rf == null ? 1 : 0.7 + 0.3 * U.smoothstep(100, 150, rf);
+      ctx.globalAlpha = alpha * lift * (0.85 + 0.15 * Math.sin(t * 0.4));
       var ax = Math.sin(t * 0.05) * 8;
       ctx.drawImage(aur, Math.round(ax), 0);
       ctx.drawImage(aur, Math.round(ax) - (aur.width || C.W), 0);
     }
     ctx.restore();
+
+    if (rf != null) SITF.Sky.drawNightSky(ctx, rf, t, alpha);
   };
 
   // Just the peak silhouette of the night stack, at the height it sits for a
@@ -100,9 +115,9 @@
   };
 
   // Aurora night stack (nature_6).
-  P.drawNight = function (ctx, climbPx, t, alpha) {
+  P.drawNight = function (ctx, climbPx, t, alpha, rf) {
     if (alpha <= 0) return;
-    P.drawNightSky(ctx, t, alpha);
+    P.drawNightSky(ctx, t, alpha, rf);
     P.drawNightPeaks(ctx, climbPx, alpha);
   };
 
@@ -116,7 +131,7 @@
     var night = P.nightAt(rowFloat);
 
     if (night < 1) {
-      P.drawDay(ctx, climbPx, t, 1);
+      P.drawDay(ctx, climbPx, t, 1, rowFloat);
       if (dusk > 0) {
         ctx.save();
         ctx.globalAlpha = 0.38 * dusk;
@@ -125,7 +140,11 @@
         ctx.restore();
       }
     }
-    if (night > 0) P.drawNight(ctx, climbPx, t, night);
+    if (night > 0) P.drawNight(ctx, climbPx, t, night, rowFloat);
+
+    // The cloud deck sits in front of both stacks: it is nearer than any
+    // of the painted mountains once you are above it.
+    SITF.Sky.drawClouds(ctx, rowFloat, t);
   };
 
   // Fog tint follows the light: cool white by day, grey-blue on the ridge,

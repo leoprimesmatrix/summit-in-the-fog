@@ -66,6 +66,7 @@
     if (C.DEBUG) M.validate(false);
     F.reset();
     Part.clear();
+    SITF.Sky.reset();
 
     climber = {
       row: 0, lane: 1, state: 'idle', t: 0,
