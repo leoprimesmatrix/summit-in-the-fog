@@ -11,7 +11,7 @@
   var COL = C.COLORS;
 
   var data, t, best, isRecord, inputDelay, snowAcc, moteAcc, bestScore, isScoreRecord;
-  var rows, rowsShown, scoreDone;
+  var rows, rowsShown, scoreDone, shootTimer, shoot;
 
   // Reveal timeline in seconds after entering the screen.
   var T_TITLE = 0.0, T_ALT = 0.25, T_ROWS = 0.5, T_ROW_STEP = 0.1, T_ROW_LEN = 0.18;
@@ -27,7 +27,10 @@
     moteAcc = 0;
     rowsShown = 0;
     scoreDone = false;
+    shootTimer = 2.5;
+    shoot = null;
     Part.clear();
+    buildVista();
 
     var stored = U.storageGet(C.STORAGE_KEY_BEST);
     var prev = stored ? parseFloat(stored) : null;
@@ -103,6 +106,23 @@
           color: Math.random() < 0.7 ? COL.accent : '#ffffff', alpha: 0.5, layer: 'screen'
         });
       }
+      // The occasional meteor over the far ranges.
+      if (shoot) {
+        shoot.age += dt;
+        shoot.x += shoot.vx * dt;
+        shoot.y += shoot.vy * dt;
+        if (shoot.age >= shoot.life) shoot = null;
+      } else {
+        shootTimer -= dt;
+        if (shootTimer <= 0) {
+          shootTimer = 5 + Math.random() * 8;
+          shoot = {
+            x: Math.random() * C.W * 0.6, y: 8 + Math.random() * 46,
+            vx: 170 + Math.random() * 110, vy: 46 + Math.random() * 34,
+            age: 0, life: 0.75 + Math.random() * 0.35
+          };
+        }
+      }
     } else {
       snowAcc += dt * 14;
       while (snowAcc >= 1) {
@@ -161,7 +181,13 @@
   }
 
   function drawSummit(ctx) {
-    Par.drawNight(ctx, 150 * C.ROW_H, SITF.time, 1);
+    Par.drawNightSky(ctx, SITF.time, 1);
+    drawStars(ctx);
+    drawShoot(ctx);
+    ctx.drawImage(vistaFar, 0, 0);
+    drawCloudSea(ctx, SITF.time);
+    ctx.drawImage(vistaNear, 0, 0);
+    drawSummitFigure(ctx);
     Part.draw(ctx, 'screen');
 
     ctx.save();
@@ -214,6 +240,230 @@
     }
 
     drawFooter(ctx, 'ENTER  CLIMB AGAIN', 'ESC  TITLE');
+  }
+
+  // ---- summit vista -------------------------------------------------------
+  // The backdrop for the summit screen: three ranges of peaks receding into
+  // the aurora, the sea of cloud you climbed out of, and the crag you are
+  // standing on. Everything static is baked once into two canvases so the
+  // per-frame cost is three drawImage calls plus the drifting cloud strips.
+
+  var vistaFar = null, vistaNear = null, clouds = null, stars = null;
+
+  // A seamless height profile across the screen, built from harmonics whose
+  // periods divide the width exactly so the left and right edges agree.
+  function profile(seed, baseY, amp) {
+    var rnd = U.mulberry32(seed);
+    var k = [1 + Math.floor(rnd() * 2), 3 + Math.floor(rnd() * 2),
+             6 + Math.floor(rnd() * 3), 13 + Math.floor(rnd() * 6)];
+    var ph = [rnd() * 6.283, rnd() * 6.283, rnd() * 6.283, rnd() * 6.283];
+    var w = [0.50, 0.27, 0.15, 0.08];
+    var out = [];
+    for (var x = 0; x < C.W; x++) {
+      var v = 0;
+      for (var i = 0; i < 4; i++) v += Math.sin(2 * Math.PI * k[i] * x / C.W + ph[i]) * w[i];
+      out.push(Math.round(baseY - v * amp));
+    }
+    return out;
+  }
+
+  // Fill below the profile, then lay snow on the shoulders: deepest where the
+  // slope is shallow and the peak is high, which is where snow actually sits.
+  function paintRange(cx, prof, fill, snowCol, depth, snowLine) {
+    for (var x = 0; x < C.W; x++) {
+      var top = prof[x];
+      cx.fillStyle = fill;
+      cx.fillRect(x, top, 1, C.H - top);
+      if (depth <= 0 || top >= snowLine) continue;
+      var l = prof[x > 0 ? x - 1 : 0], r = prof[x < C.W - 1 ? x + 1 : C.W - 1];
+      var slope = Math.abs(r - l) / 2;
+      var d = Math.round(depth * U.clamp(1.3 - slope * 0.45, 0, 1) *
+                         U.clamp((snowLine - top) / 16, 0, 1));
+      if (d > 0) { cx.fillStyle = snowCol; cx.fillRect(x, top, 1, d); }
+    }
+  }
+
+  // Near crag: two gaussian humps in the bottom corners, roughened so the
+  // silhouette reads as rock rather than a curve.
+  function cragTop(x) {
+    var a = C.H + 10 - 80 * Math.exp(-Math.pow((x - 66) / 62, 2))
+                    - 22 * Math.exp(-Math.pow((x - 168) / 80, 2));
+    var b = C.H + 12 - 54 * Math.exp(-Math.pow((x - 540) / 56, 2))
+                    - 16 * Math.exp(-Math.pow((x - 448) / 66, 2));
+    var top = Math.min(a, b);
+    top += Math.sin(x * 0.71) * 1.1 + Math.sin(x * 0.23 + 1.7) * 2.0;
+    return Math.round(top);
+  }
+
+  function paintCrag(cx) {
+    var rnd = U.mulberry32(5150);
+    var prof = [];
+    for (var x = 0; x < C.W; x++) prof.push(cragTop(x));
+    for (x = 0; x < C.W; x++) {
+      var top = prof[x];
+      if (top >= C.H) continue;
+      cx.fillStyle = '#050e1c';
+      cx.fillRect(x, top, 1, C.H - top);
+
+      // Strata and grain, so the near rock is a face and not a black blob.
+      var band = Math.round(6 + 5 * Math.sin(x * 0.06 + 1.1) + 3 * Math.sin(x * 0.19));
+      cx.fillStyle = '#0d1e33';
+      cx.fillRect(x, top + band, 1, 2);
+      cx.fillRect(x, top + band + 9, 1, 1);
+      if (rnd() < 0.22) {
+        cx.fillStyle = '#16304a';
+        cx.fillRect(x, top + 3 + Math.floor(rnd() * 22), 1, 1);
+      }
+
+      var l = prof[x > 0 ? x - 1 : 0], r = prof[x < C.W - 1 ? x + 1 : C.W - 1];
+      var slope = Math.abs(r - l) / 2;
+      // Snow only on the shoulders of the humps; the low run-off toward the
+      // frame edges stays bare rock so the silhouette does not read as a wire.
+      var lie = U.clamp(1.25 - slope * 0.85, 0, 1) * U.clamp((C.H - 8 - top) / 14, 0, 1);
+      var d = Math.round((3 + rnd() * 2.2) * lie);
+      if (d > 0) {
+        // On a steep column the neighbour's surface sits several pixels lower;
+        // reach down to meet it, otherwise the snow breaks into dashes.
+        var gap = U.clamp(Math.max(l, r) - top, 0, 7);
+        var lit = Math.max(1, d);
+        cx.fillStyle = '#e2eef8';
+        cx.fillRect(x, top + 1, 1, lit);
+        cx.fillStyle = '#6d8ca8';
+        cx.fillRect(x, top + 1 + lit, 1, 2 + gap);
+        // Aurora rim on the very top pixel; it is the only light up here.
+        cx.fillStyle = U.rgba(COL.accent, 0.45 + 0.35 * lie);
+        cx.fillRect(x, top, 1, 1);
+      } else {
+        cx.fillStyle = U.rgba(COL.accent, 0.18);
+        cx.fillRect(x, top, 1, 1);
+      }
+    }
+  }
+
+  // One seamless band of cloud, scrolled twice side by side at draw time.
+  function cloudStrip(seed, h, fill, edge) {
+    var cv = U.makeCanvas(C.W, h);
+    var cx = cv.getContext('2d');
+    var rnd = U.mulberry32(seed);
+    var k = [2, 3, 5, 8];
+    var ph = [rnd() * 6.283, rnd() * 6.283, rnd() * 6.283, rnd() * 6.283];
+    var w = [0.42, 0.28, 0.19, 0.11];
+    for (var x = 0; x < C.W; x++) {
+      var v = 0;
+      for (var i = 0; i < 4; i++) v += Math.sin(2 * Math.PI * k[i] * x / C.W + ph[i]) * w[i];
+      var top = Math.round(h * 0.5 - v * h * 0.42);
+      top = Math.max(0, Math.min(h - 1, top));
+      cx.fillStyle = fill;
+      cx.fillRect(x, top, 1, h - top);
+      cx.fillStyle = edge;
+      cx.fillRect(x, top, 1, 1);
+    }
+    return cv;
+  }
+
+  function buildVista() {
+    if (vistaFar) return;
+
+    vistaFar = U.makeCanvas(C.W, C.H);
+    var fc = vistaFar.getContext('2d');
+    paintRange(fc, profile(9101, 150, 22), '#122c47', '#2f5c80', 2, 148);
+    paintRange(fc, profile(9102, 178, 30), '#0d2039', '#27496b', 3, 172);
+    // Haze the ranges into the horizon: darker and flatter toward the base.
+    fc.globalCompositeOperation = 'source-atop';
+    var hg = fc.createLinearGradient(0, 120, 0, 240);
+    hg.addColorStop(0, U.rgba(COL.night, 0));
+    hg.addColorStop(1, U.rgba(COL.night, 0.75));
+    fc.fillStyle = hg;
+    fc.fillRect(0, 0, C.W, C.H);
+    fc.globalCompositeOperation = 'source-over';
+
+    vistaNear = U.makeCanvas(C.W, C.H);
+    var nc = vistaNear.getContext('2d');
+    paintRange(nc, profile(9103, 216, 26), '#071426', '#193d5b', 3, 212);
+    paintCrag(nc);
+
+    clouds = [
+      { img: cloudStrip(7301, 46, '#2b4c6e', '#5c86a8'), y: 184, a: 0.30, sp: 3.0 },
+      { img: cloudStrip(7302, 50, '#1d3a58', '#4a7396'), y: 200, a: 0.42, sp: 6.5 },
+      { img: cloudStrip(7303, 56, '#12263f', '#3a5f80'), y: 220, a: 0.58, sp: 11.0 }
+    ];
+
+    var rnd = U.mulberry32(4242);
+    stars = [];
+    for (var i = 0; i < 34; i++) {
+      stars.push({
+        x: Math.floor(rnd() * C.W), y: Math.floor(rnd() * 132),
+        a: 0.35 + rnd() * 0.5, sp: 0.8 + rnd() * 2.2, ph: rnd() * 6.283,
+        big: rnd() < 0.18
+      });
+    }
+  }
+
+  function drawStars(ctx) {
+    ctx.save();
+    ctx.fillStyle = '#ffffff';
+    for (var i = 0; i < stars.length; i++) {
+      var s = stars[i];
+      var a = s.a * (0.55 + 0.45 * Math.sin(SITF.time * s.sp + s.ph));
+      ctx.globalAlpha = a;
+      ctx.fillRect(s.x, s.y, 1, 1);
+      if (s.big) {
+        ctx.globalAlpha = a * 0.45;
+        ctx.fillRect(s.x - 1, s.y, 1, 1);
+        ctx.fillRect(s.x + 1, s.y, 1, 1);
+        ctx.fillRect(s.x, s.y - 1, 1, 1);
+        ctx.fillRect(s.x, s.y + 1, 1, 1);
+      }
+    }
+    ctx.restore();
+  }
+
+  function drawShoot(ctx) {
+    if (!shoot) return;
+    var k = shoot.age / shoot.life;
+    var fade = k < 0.2 ? k / 0.2 : 1 - (k - 0.2) / 0.8;
+    ctx.save();
+    ctx.globalCompositeOperation = 'lighter';
+    for (var i = 0; i < 12; i++) {
+      var f = i / 12;
+      ctx.globalAlpha = fade * (1 - f) * 0.75;
+      ctx.fillStyle = i < 3 ? '#ffffff' : COL.text;
+      ctx.fillRect(Math.round(shoot.x - shoot.vx * f * 0.055),
+                   Math.round(shoot.y - shoot.vy * f * 0.055), 1, 1);
+    }
+    ctx.restore();
+  }
+
+  function drawCloudSea(ctx, tt) {
+    ctx.save();
+    for (var i = 0; i < clouds.length; i++) {
+      var c = clouds[i];
+      var off = -((tt * c.sp) % C.W);
+      ctx.globalAlpha = c.a;
+      ctx.drawImage(c.img, Math.round(off), c.y);
+      ctx.drawImage(c.img, Math.round(off) + C.W, c.y);
+    }
+    ctx.restore();
+  }
+
+  // The payoff: you, on top, lantern still lit, flags planted beside you.
+  function drawSummitFigure(ctx) {
+    var fx = 66, fy = cragTop(66) + 1;
+    var frame = Math.floor(SITF.time * 3) % 2;
+    var flick = 0.55 + 0.12 * Math.sin(SITF.time * 6.1) + 0.06 * Math.sin(SITF.time * 11.3);
+
+    ctx.save();
+    ctx.globalAlpha = 0.5;
+    ctx.drawImage(S.img.pool_lantern,
+                  Math.round(fx - S.img.pool_lantern.width / 2),
+                  Math.round(fy - S.img.pool_lantern.height / 2));
+    ctx.restore();
+
+    S.drawSummit(ctx, 104, cragTop(104) + 1, frame);
+    S.drawClimber(ctx, fx, fy, 'summit', 0, 1);
+
+    var lo = S.lanternOffset('summit');
+    S.drawGlow(ctx, S.img.glow_lantern, fx + lo.x, fy + lo.y, flick, 0.75);
   }
 
   function drawWhiteout(ctx) {

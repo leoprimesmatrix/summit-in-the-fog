@@ -54,8 +54,9 @@
     ctx.restore();
   };
 
-  // Aurora night stack (nature_6).
-  P.drawNight = function (ctx, climbPx, t, alpha) {
+  // Just the sky half of the night stack: stars and the drifting aurora.
+  // Split out so the summit screen can build its own peaks over it.
+  P.drawNightSky = function (ctx, t, alpha) {
     if (alpha <= 0) return;
     ctx.save();
     ctx.globalAlpha = alpha;
@@ -66,13 +67,20 @@
 
     var aur = img('aurora6');
     if (aur) {
-      ctx.save();
       ctx.globalAlpha = alpha * (0.85 + 0.15 * Math.sin(t * 0.4));
       var ax = Math.sin(t * 0.05) * 8;
       ctx.drawImage(aur, Math.round(ax), 0);
       ctx.drawImage(aur, Math.round(ax) - (aur.width || C.W), 0);
-      ctx.restore();
     }
+    ctx.restore();
+  };
+
+  // Aurora night stack (nature_6).
+  P.drawNight = function (ctx, climbPx, t, alpha) {
+    if (alpha <= 0) return;
+    P.drawNightSky(ctx, t, alpha);
+    ctx.save();
+    ctx.globalAlpha = alpha;
 
     // Dark peaks rise into view through the final zone, then settle.
     var peaksY = U.clamp((climbPx - 100 * C.ROW_H) * 0.10 + 60, 0, 190);
