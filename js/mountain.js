@@ -47,7 +47,7 @@
     var rng = U.mulberry32(seed);
     var rows = [];
 
-    // Row 0: wide starting ledge under the middle lanes.
+    // Row 0: the camp terrace, wide enough to stand under every lane.
     var mid = Math.floor(laneCount() / 2);
     rows.push({
       index: 0,
@@ -59,30 +59,46 @@
 
     var prevLanes = [mid - 1, mid, mid + 1];
     var lastLane = mid;
-    var streak = 0;
+    var streak = 0;        // rows running in the same lane
+    var leapRun = 0;       // two-lane moves in a row
+    var sinceLeap = 0;     // rows since the last two-lane move
+    var edgeRun = 0;       // rows running against an outside wall
     var lastWasCrumble = false;
     var lastStep = 0;
 
     for (var r = 1; r <= C.ROWS; r++) {
       var zi = U.zoneIndexOf(r);
       var zone = C.ZONES[zi];
-      var reach = reachable(prevLanes);
+      // Every lane reachable from every foothold below: whichever branch the
+      // player took, this is a move they can actually make.
+      var open = reachable(prevLanes);
+      var reach = open;
 
-      // Force a change of lane after a long straight run so the path zig-zags.
-      if (streak >= 3) {
-        var alt = reach.filter(function (l) { return l !== lastLane; });
-        if (alt.length > 0) reach = alt;
-      }
+      // The route has to keep moving. Two rows in one lane is a pause; three
+      // is a ladder, and a ladder is not a climb.
+      if (streak >= 2) reach = prefer(reach, function (l) { return l !== lastLane; });
 
-      // Weighted pick. Two-lane steps are the interesting ones, so their
-      // share rises with the stage; drifting back over the same lane twice
-      // running is the least interesting, so it is damped.
+      // Two big reaches back to back is a flourish. Three is a slog.
+      if (leapRun >= 2) reach = prefer(reach, function (l) { return Math.abs(l - lastLane) < 2; });
+
+      // A stage that goes too long without one is a straight line up the
+      // middle, which is the most boring thing this generator can produce.
+      // Not in the thin air, though: up there a big reach costs breath the
+      // climber may not have, and the tension is already coming from that.
+      var gap = zone.breath ? 99 : (zone.leapChance >= 0.26 ? 6 : 9);
+      if (sinceLeap >= gap) reach = prefer(reach, function (l) { return Math.abs(l - lastLane) === 2; });
+
+      // Never lean on the same wall twice running.
+      if (edgeRun >= 1) reach = prefer(reach, function (l) { return l !== 0 && l !== laneCount() - 1; });
+
+      // Weighted pick over what is left. Two-lane steps are the interesting
+      // ones, so their share rises with the stage; drifting back over the
+      // same lane twice running is the least interesting, so it is damped.
       var weights = reach.map(function (l) {
         var step = Math.abs(l - lastLane);
-        var w = (step === 0) ? 0.16 : (step === 1 ? 0.55 : zone.leapChance + 0.10);
+        var w = (step === 0) ? 0.22 : (step === 1 ? 0.55 : zone.leapChance + 0.02);
         if (step !== 0 && (l - lastLane) * lastStep < 0) w *= 0.7;   // no zig-zag jitter
-        // Keep the route off the walls: edge lanes are half as likely.
-        if (l === 0 || l === laneCount() - 1) w *= 0.55;
+        if (l === 0 || l === laneCount() - 1) w *= 0.6;
         return w;
       });
       var total = weights.reduce(function (a, b) { return a + b; }, 0);
@@ -93,7 +109,11 @@
         if (pick <= 0) { lane = reach[w2]; break; }
       }
 
+      var step2 = Math.abs(lane - lastLane);
       streak = (lane === lastLane) ? streak + 1 : 1;
+      leapRun = (step2 === 2) ? leapRun + 1 : 0;
+      sinceLeap = (step2 === 2) ? 0 : sinceLeap + 1;
+      edgeRun = (lane === 0 || lane === laneCount() - 1) ? edgeRun + 1 : 0;
       lastStep = lane - lastLane;
       lastLane = lane;
 
@@ -102,34 +122,39 @@
       var footholds = [makeFoothold(lane, isSummit ? 'summit' : 'rock')];
 
       if (!isSummit && !hasCairn) {
-        // A fork: a second foothold on the same row, reachable from at least
-        // one foothold below. It opens a parallel line up the face — usually
-        // the greedier one, since the spare ledge carries the crystal.
+        // A fork: a second foothold on the same row, and a real choice. It
+        // is drawn from the same set of lanes the main line came from, so it
+        // is reachable no matter which branch you are standing on, and it is
+        // placed two lanes away where there is room - a ledge immediately
+        // next to the obvious one is not a decision, it is decoration.
         var forkOdds = zone.forkChance + zone.mercyChance * 0.5;
         if (rng() < forkOdds) {
-          var any = reachableAny(prevLanes);
-          var cands = any.filter(function (l) {
-            var d = Math.abs(l - lane);
-            return d >= 1 && d <= maxHop();
-          });
-          if (cands.length > 0) {
-            var extra = cands[Math.floor(rng() * cands.length) % cands.length];
+          var cands = open.filter(function (l) { return l !== lane; });
+          var wide = cands.filter(function (l) { return Math.abs(l - lane) >= 2; });
+          var pool = wide.length ? wide : cands;
+          if (pool.length > 0) {
+            var extra = pool[Math.floor(rng() * pool.length) % pool.length];
             var fork = makeFoothold(extra, 'rock');
+            // The greedier line carries the reward.
             if (rng() < 0.6) fork.crystal = true;
             footholds.push(fork);
           }
         }
-        if (!footholds[0].crystal && footholds.length === 1 && rng() < zone.crystalChance) {
+        if (footholds.length === 1 && rng() < zone.crystalChance) {
           footholds[0].crystal = true;
         }
 
-        // Crumbling ledge: never two rows running, never the only way up.
-        // A snow bridge is the same trap wearing an honest face, so it is
-        // only ever set on a row that offers a second way.
-        if (footholds.length > 1 && rng() < (zone.bridgeChance || 0)) {
+        // Traps are never sprung on the approach to a checkpoint, never in
+        // the first rows of a new stage, and never two rows running. A snow
+        // bridge is a crumble wearing an honest face, so it is only ever set
+        // on a row that offers a second way up.
+        var nearCairn = ((r + 1) % C.CAIRN_EVERY === 0);
+        var freshZone = (r - zone.from) < 2;
+        var mayTrap = !nearCairn && !freshZone;
+        if (mayTrap && footholds.length > 1 && rng() < (zone.bridgeChance || 0)) {
           footholds[rng() < 0.5 ? 0 : 1].type = 'bridge';
           lastWasCrumble = false;
-        } else if (footholds.length === 1 && !lastWasCrumble && rng() < zone.crumbleChance) {
+        } else if (mayTrap && footholds.length === 1 && !lastWasCrumble && rng() < zone.crumbleChance) {
           footholds[0].type = 'crumble';
           lastWasCrumble = true;
         } else {
@@ -152,6 +177,40 @@
 
     M.rows = rows;
     return rows;
+  };
+
+  // Narrow a candidate list, but never to nothing: a shaping rule is a
+  // preference, and the route staying legal always wins over the route
+  // being interesting.
+  function prefer(list, ok) {
+    var kept = list.filter(ok);
+    return kept.length > 0 ? kept : list;
+  }
+
+  // What the generator actually produced, for the playtest harness.
+  M.stats = function () {
+    var s = { rows: M.rows.length - 1, forks: 0, crystals: 0, crumble: 0, bridge: 0,
+              steps: [0, 0, 0], maxStreak: 0, maxEdgeRun: 0, laneUse: [] };
+    for (var i = 0; i < C.LANE_X.length; i++) s.laneUse.push(0);
+    var streak = 0, edge = 0, prev = M.rows[0].footholds[0].lane;
+    for (var r = 1; r < M.rows.length; r++) {
+      var fs = M.rows[r].footholds;
+      if (fs.length > 1) s.forks++;
+      for (var i2 = 0; i2 < fs.length; i2++) {
+        if (fs[i2].crystal) s.crystals++;
+        if (fs[i2].type === 'crumble') s.crumble++;
+        if (fs[i2].type === 'bridge') s.bridge++;
+      }
+      var lane = fs[0].lane;
+      s.laneUse[lane]++;
+      s.steps[Math.abs(lane - prev)]++;
+      streak = (lane === prev) ? streak + 1 : 1;
+      edge = (lane === 0 || lane === C.LANE_X.length - 1) ? edge + 1 : 0;
+      s.maxStreak = Math.max(s.maxStreak, streak);
+      s.maxEdgeRun = Math.max(s.maxEdgeRun, edge);
+      prev = lane;
+    }
+    return s;
   };
 
   // Every row must be reachable from the one below, and every foothold below

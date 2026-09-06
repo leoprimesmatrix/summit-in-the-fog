@@ -1265,9 +1265,11 @@
         darken += 0.18;
       }
       if (f.type === 'summit') {
-        S.drawLedge(ctx, x, y, 'rock', 0, darken, 2, 0);
+        S.drawLedge(ctx, x, y, 'rock', 0, darken, 2, r * 5 + i);
       } else {
-        S.drawLedge(ctx, x, y, f.type, jitter, darken, row.zone, (r + i) % 2);
+        // Vary the rock by row AND lane: an alternating pattern down the
+        // face is as obvious as no variation at all.
+        S.drawLedge(ctx, x, y, f.type, jitter, darken, row.zone, r * 5 + f.lane * 3 + i);
       }
       if (f.crystal) {
         var bobC = Math.round(Math.sin(SITF.time * 3 + r) * 1.5);

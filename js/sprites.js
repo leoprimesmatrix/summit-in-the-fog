@@ -209,11 +209,23 @@
   ];
 
   // ---- ledges -------------------------------------------------------------
-  // The ledge canvas is 40 x 14: two rows above the surface for grass or
-  // snow drifts, ten rows of rock, two rows below for icicles. drawLedge
-  // offsets the image so the rock surface sits exactly on the given y.
+  // A ledge is drawn, not stamped out of one template. Every one gets its own
+  // width, end shapes, body depth, fractures and weathering, so a face full
+  // of them reads as broken rock instead of a row of identical planks.
+  //
+  // The one thing that never varies is the standing surface: a flat, brightly
+  // lit line the full width of the footprint, with the body falling away dark
+  // beneath it. That single row is what the player reads through fog to
+  // decide whether there is somewhere to put their feet, so nothing - no
+  // snow, no crack, no crumble - is ever allowed to break it up.
 
-  var LEDGE_TOP_PAD = 2;
+  var LEDGE_CW = 46;         // canvas width; the standable footprint is 40
+  var LEDGE_FOOT = 40;
+  var LEDGE_CH = 24;
+  var LEDGE_SURF = 6;        // canvas row of the standing surface
+  var LEDGE_DEPTH = 12;      // how far the rock hangs below it
+  var LEDGE_VARIANTS = 4;
+  var START_PAD = 4;
 
   // Per-stage rock palettes: mossy granite at the camp, warm sandstone in the
   // treeline, blue ice on the glacier, cold grey gneiss on the ridge, and
@@ -227,124 +239,220 @@
   ];
   var LEDGE_ZONES = LEDGE_PAL.length;
 
-  function ledgeRows(zone, cracked, seed) {
+  function buildLedge(zone, kind, seed) {
+    var P = LEDGE_PAL[zone];
+    var TONE = [P.m, P.a, P.b, P.c, P.k];   // lit lip -> shadow -> underside
     var rnd = U.mulberry32(seed);
-    var rows = [
-      '........................................',
-      '........................................',
-      '..nnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnn....',
-      '.nnmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmnn...',
-      '.maaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaam...',
-      'mabbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbam..',
-      'abbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbba..',
-      'bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb..',
-      '.cbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbc...',
-      '..ccbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbcc....',
-      '...cccccbbbbbbbbbbbbbbbbbbbbbccccc......',
-      '.......kkccccccccccccccccccckk..........',
-      '........................................',
-      '........................................'
-    ];
-    var grid = rows.map(function (r) { return r.split(''); });
-    function set(x, y, ch) { if (y >= 0 && y < grid.length && x >= 0 && x < 40) grid[y][x] = ch; }
-    function get(x, y) { return (y >= 0 && y < grid.length && x >= 0 && x < 40) ? grid[y][x] : '.'; }
+    var cv = U.makeCanvas(LEDGE_CW, LEDGE_CH);
+    var cx = cv.getContext('2d');
 
-    // Rock strata: a darker seam and a few lighter flecks so the face reads
-    // as stone instead of a flat fill.
-    for (var sx = 2; sx < 36; sx++) {
-      if (rnd() < 0.55) set(sx, 7 + (sx % 7 === 0 ? 1 : 0), 'c');
-      if (rnd() < 0.10) set(sx, 5 + Math.floor(rnd() * 3), 'a');
-      if (rnd() < 0.08) set(sx, 8 + Math.floor(rnd() * 2), 'k');
+    function px(x, y, col) {
+      if (x < 0 || x >= LEDGE_CW || y < 0 || y >= LEDGE_CH) return;
+      cx.fillStyle = col;
+      cx.fillRect(x, y, 1, 1);
+    }
+    function cut(x, y) {
+      if (x < 0 || x >= LEDGE_CW || y < 0 || y >= LEDGE_CH) return;
+      cx.clearRect(x, y, 1, 1);
     }
 
-    if (zone <= 1) {
-      // Grass tufts poke through the thin snow, moss clings to the face.
-      for (var gx = 3; gx < 35; gx += 1) {
-        if (rnd() < 0.22) {
-          set(gx, 1, 'g'); set(gx, 2, 'g');
-          if (rnd() < 0.5) set(gx, 0, 'x');
-          if (rnd() < 0.5) set(gx + 1, 1, 'G');
+    // The rock always covers the footprint (columns 3..42) and juts a little
+    // past it by a different amount at each end.
+    var x0 = Math.round((LEDGE_CW - LEDGE_FOOT) / 2);
+    var lx = x0 - 2 + Math.floor(rnd() * 3);
+    var rx = x0 + LEDGE_FOOT - 1 + Math.floor(rnd() * 3);
+    var span = rx - lx;
+
+    // Body profile: a thick middle that thins toward each end, by a different
+    // amount and over a different distance on each side, with two slow waves
+    // through it so the underside is never a clean curve.
+    var ph1 = rnd() * 6.283, ph2 = rnd() * 6.283;
+    var endL = 4 + Math.floor(rnd() * 7);
+    var endR = 4 + Math.floor(rnd() * 7);
+    var core = LEDGE_DEPTH - Math.floor(rnd() * 3);
+    // The underside steps in flat blocks a few pixels wide rather than
+    // wobbling per column: broken stone has facets, and a per-pixel jitter
+    // just reads as fuzz along the bottom edge.
+    var blocks = [];
+    for (var bi = 0; bi < 12; bi++) blocks.push(Math.round((rnd() - 0.5) * 2.6));
+    function depthAt(x) {
+      var d = core
+        + Math.sin((x - lx) * 0.19 + ph1) * 1.4
+        + blocks[Math.floor(Math.max(0, x - lx) / 5) % blocks.length]
+        + Math.sin((x - lx) * 0.09 + ph2) * 0.6;
+      var fL = x - lx, fR = rx - x;
+      if (fL < endL) d *= 0.34 + 0.66 * (fL + 1) / endL;
+      if (fR < endR) d *= 0.34 + 0.66 * (fR + 1) / endR;
+      return Math.max(2, Math.round(d));
+    }
+
+    // Body. Light comes from the upper left, so the left shoulder lifts a
+    // tone and the right end turns away into shadow: that is what stops a
+    // ledge reading as a flat sticker on the wall.
+    for (var x = lx; x <= rx; x++) {
+      var d = depthAt(x);
+      var shade = 0;
+      if (x - lx < 3) shade = -1;
+      else if (rx - x < 5) shade = 1;
+      var strat = Math.round(Math.sin(x * 0.31 + ph1) * 0.8);
+      for (var k = 0; k < d; k++) {
+        var f = k / d;
+        var band;
+        if (k === 0) band = 0;                       // the standing line
+        else if (k <= 2) band = 1 + shade;
+        else if (f < 0.58) band = 2 + shade + strat;
+        else if (f < 0.86) band = 3 + shade;
+        else band = 4;
+        if (k > 0 && rnd() < 0.07) band += (rnd() < 0.5 ? -1 : 1);
+        px(x, LEDGE_SURF + k, TONE[U.clamp(band, 0, 4)]);
+      }
+      // A hard dark line a few rows under the lip reads as an overhang.
+      if (d > 5 && rnd() < 0.5) px(x, LEDGE_SURF + 3, TONE[3]);
+    }
+
+    // Fractures: seams that wander down out of the body, stopping short of
+    // the lip so they never look like a gap you could fall through.
+    var seams = 1 + Math.floor(rnd() * 3);
+    for (var s = 0; s < seams; s++) {
+      var sx = lx + 4 + Math.floor(rnd() * Math.max(1, span - 8));
+      var sd = depthAt(sx);
+      var sy = 2 + Math.floor(rnd() * 2);
+      var len = Math.max(2, Math.round(sd * (0.45 + rnd() * 0.4)));
+      var drift = 0;
+      for (var q = 0; q < len && sy + q < sd; q++) {
+        if (rnd() < 0.3) drift += rnd() < 0.5 ? 1 : -1;
+        px(sx + drift, LEDGE_SURF + sy + q, TONE[4]);
+        if (rnd() < 0.35) px(sx + drift + 1, LEDGE_SURF + sy + q, TONE[3]);
+      }
+    }
+
+    // Weathering above the surface. Snow and grass sit on top of the rock,
+    // never in place of the lit lip.
+    if (zone >= 2) {
+      // Windblown: the drift piles against one end and thins across.
+      var heavy = zone === 4 ? 1.0 : (zone === 2 ? 0.62 : 0.34);
+      var cap = zone === 4 ? 3 : 2;
+      var side = rnd() < 0.5 ? 1 : -1;
+      var prevH = 0;
+      for (var cx2 = lx + 1; cx2 <= rx - 1; cx2++) {
+        var u = (rx - cx2) / span;
+        var w = side > 0 ? u : 1 - u;
+        var sh = Math.round(heavy * (0.30 + 1.05 * w) * cap + (rnd() - 0.5) * 0.9);
+        sh = U.clamp(sh, 0, cap);
+        // A drift has one continuous surface: it may not step by more than a
+        // pixel at a time, or it dithers into speckle and stops reading as snow.
+        if (sh > prevH + 1) sh = prevH + 1;
+        prevH = sh;
+        for (var sy2 = 0; sy2 < sh; sy2++) {
+          px(cx2, LEDGE_SURF - 1 - sy2, sy2 === sh - 1 ? P.n : P.m);
         }
       }
-      for (var mx = 1; mx < 37; mx++) {
-        if (rnd() < 0.12) { set(mx, 6 + Math.floor(rnd() * 3), 'G'); }
-      }
-    } else if (zone === 3) {
-      // Windblown snow piles on one side; lichen specks on the stone.
-      var pile = rnd() < 0.5 ? 4 : 30;
-      for (var px = 0; px < 6; px++) {
-        set(pile + px, 1, 'n');
-        if (px > 0 && px < 5) set(pile + px, 0, 'm');
-      }
-      for (var lx = 2; lx < 36; lx++) {
-        if (rnd() < 0.08) set(lx, 5 + Math.floor(rnd() * 4), 'x');
+      // A few short icicles off the underside - long ones read as railings
+      // hanging under the ledge rather than as ice on it.
+      var ice = zone === 3 ? 1 : 3;
+      for (var ii = 0; ii < ice; ii++) {
+        var ix = lx + 5 + Math.floor(rnd() * Math.max(1, span - 10));
+        var il = 1 + Math.floor(rnd() * 3);
+        var base = LEDGE_SURF + depthAt(ix);
+        for (var iy = 0; iy < il; iy++) px(ix, base + iy, iy === il - 1 ? P.n : P.m);
       }
     } else {
-      // Deep snow cap and icicles hanging from the underside.
-      for (var cx2 = 2; cx2 < 36; cx2++) {
-        if (rnd() < 0.7) set(cx2, 1, 'n');
-        if (rnd() < 0.25) set(cx2, 0, 'n');
-        set(cx2, 4, rnd() < 0.5 ? 'm' : 'n');
-      }
-      for (var ix = 6; ix < 32; ix += 1) {
-        if (rnd() < 0.2) {
-          set(ix, 11, 'x'); set(ix, 12, 'G');
-          if (rnd() < 0.4) set(ix, 13, 'G');
+      // A few clumps of grass, not a fringe: they mark the ledge as alive
+      // without softening the line you stand on.
+      var tufts = 2 + Math.floor(rnd() * 3);
+      for (var t = 0; t < tufts; t++) {
+        var gx = lx + 3 + Math.floor(rnd() * Math.max(1, span - 6));
+        var gh = 2 + Math.floor(rnd() * 2);
+        for (var gy = 0; gy < gh; gy++) {
+          px(gx, LEDGE_SURF - 1 - gy, gy === gh - 1 ? P.x : P.g);
         }
+        if (rnd() < 0.7) px(gx + 1, LEDGE_SURF - 1, P.G);
+        if (rnd() < 0.4) px(gx - 1, LEDGE_SURF - 1, P.G);
+      }
+      // Moss in the shaded joints just under the lip.
+      for (var mm = 0; mm < 5; mm++) {
+        var mx = lx + 2 + Math.floor(rnd() * Math.max(1, span - 4));
+        var my = 2 + Math.floor(rnd() * 3);
+        if (my < depthAt(mx)) px(mx, LEDGE_SURF + my, P.G);
       }
     }
 
-    if (cracked) {
-      // Fissures through the body so a crumbling ledge is legible at a glance.
-      var cracks = [7, 16, 27];
-      for (var ci = 0; ci < cracks.length; ci++) {
-        var cxp = cracks[ci];
-        for (var cy = 5; cy <= 9; cy++) {
-          set(cxp, cy, 'k');
-          if (cy % 2 === 0) cxp += (ci % 2 === 0) ? 1 : -1;
+    if (kind === 'crumble') {
+      // Already going: the body is split into blocks with daylight through
+      // the gaps and chips gone from the bottom edge. The lip stays whole,
+      // because you can still stand on it - for a moment.
+      var breaks = 2 + Math.floor(rnd() * 2);
+      for (var b = 0; b < breaks; b++) {
+        var bx = lx + 6 + Math.floor(rnd() * Math.max(1, span - 12));
+        var bd = depthAt(bx);
+        var bdrift = 0;
+        for (var by = 1; by < bd; by++) {
+          if (rnd() < 0.35) bdrift += rnd() < 0.5 ? 1 : -1;
+          var wdt = Math.floor((by / bd) * 2.2);
+          for (var w2 = -wdt; w2 <= wdt; w2++) {
+            if (by > bd * 0.34) cut(bx + bdrift + w2, LEDGE_SURF + by);
+            else px(bx + bdrift + w2, LEDGE_SURF + by, TONE[4]);
+          }
         }
       }
-      set(12, 3, 'k'); set(22, 3, 'k'); set(30, 4, 'k');
+      for (var ch = 0; ch < 8; ch++) {
+        var chx = lx + 2 + Math.floor(rnd() * Math.max(1, span - 4));
+        var chd = depthAt(chx);
+        cut(chx, LEDGE_SURF + chd - 1);
+        if (rnd() < 0.5) cut(chx, LEDGE_SURF + chd - 2);
+      }
     }
 
-    void get;
-    return grid.map(function (r) { return r.join(''); });
+    return cv;
   }
 
-  // Wide starting ledge, 216 x 12, grass tufts on top.
+  // The camp terrace: one wide ledge under every lane, built in the same
+  // language as the rest so base camp does not look like a different game.
   function buildStartLedge() {
-    // Wide enough to sit under every lane: this is the camp terrace.
-    var W = 348, H = 12;
+    var W = 348, H = 18, SURF = START_PAD;
     var cv = U.makeCanvas(W, H);
     var cx = cv.getContext('2d');
     var rnd = U.mulberry32(7);
     var P = LEDGE_PAL[0];
+    var TONE = [P.m, P.a, P.b, P.c, P.k];
 
-    cx.fillStyle = P.b;
-    cx.fillRect(2, 3, W - 4, H - 4);
-    cx.fillStyle = P.a;
-    cx.fillRect(3, 2, W - 6, 2);
-    cx.fillStyle = P.n;
-    cx.fillRect(4, 0, W - 8, 2);
-    cx.fillStyle = P.m;
-    cx.fillRect(3, 2, W - 6, 1);
-    cx.fillStyle = P.c;
-    cx.fillRect(4, H - 2, W - 8, 2);
-    cx.fillRect(0, 5, 2, 4);
-    cx.fillRect(W - 2, 5, 2, 4);
-    for (var s = 4; s < W - 4; s++) {
-      if (rnd() < 0.4) { cx.fillStyle = P.c; cx.fillRect(s, 7, 1, 1); }
-      if (rnd() < 0.08) { cx.fillStyle = P.k; cx.fillRect(s, 8 + Math.floor(rnd() * 2), 1, 1); }
+    function px(x, y, col) {
+      if (x < 0 || x >= W || y < 0 || y >= H) return;
+      cx.fillStyle = col; cx.fillRect(x, y, 1, 1);
     }
 
-    // Grass tufts poking through the snow.
-    for (var i = 0; i < 30; i++) {
-      var gx = 6 + Math.floor(rnd() * (W - 14));
+    var core = 11;
+    function depthAt(x) {
+      var d = core + Math.sin(x * 0.06) * 1.2 + Math.sin(x * 0.21 + 1.1) * 0.7;
+      var fL = x, fR = W - 1 - x;
+      if (fL < 10) d *= 0.4 + 0.6 * (fL + 1) / 10;
+      if (fR < 10) d *= 0.4 + 0.6 * (fR + 1) / 10;
+      return Math.max(3, Math.round(d));
+    }
+
+    for (var x = 0; x < W; x++) {
+      var d = depthAt(x);
+      for (var k = 0; k < d; k++) {
+        var f = k / d;
+        var band = (k === 0) ? 0 : (k <= 2 ? 1 : (f < 0.58 ? 2 : (f < 0.86 ? 3 : 4)));
+        if (k > 0 && rnd() < 0.07) band += (rnd() < 0.5 ? -1 : 1);
+        px(x, SURF + k, TONE[U.clamp(band, 0, 4)]);
+      }
+    }
+    for (var s = 0; s < 14; s++) {
+      var sx = 8 + Math.floor(rnd() * (W - 16));
+      var sd = depthAt(sx), sy = 2 + Math.floor(rnd() * 2), drift = 0;
+      var len = Math.max(2, Math.round(sd * (0.4 + rnd() * 0.4)));
+      for (var q = 0; q < len && sy + q < sd; q++) {
+        if (rnd() < 0.3) drift += rnd() < 0.5 ? 1 : -1;
+        px(sx + drift, SURF + sy + q, TONE[4]);
+      }
+    }
+    for (var t = 0; t < 26; t++) {
+      var gx = 6 + Math.floor(rnd() * (W - 12));
       var gh = 2 + Math.floor(rnd() * 3);
-      cx.fillStyle = P.g;
-      cx.fillRect(gx, -gh + 2, 1, gh);
-      cx.fillStyle = P.G;
-      cx.fillRect(gx + 1, -gh + 3, 1, gh - 1);
+      for (var gy = 0; gy < gh; gy++) px(gx, SURF - 1 - gy, gy === gh - 1 ? P.x : P.g);
+      if (rnd() < 0.7) px(gx + 1, SURF - 1, P.G);
     }
     return cv;
   }
@@ -530,11 +638,15 @@
     S.img.ledge = [];
     S.img.ledge_crumble = [];
     for (var z = 0; z < LEDGE_ZONES; z++) {
-      // Two variants per zone so neighbouring ledges do not repeat exactly.
-      S.img.ledge.push([make(ledgeRows(z, false, 100 + z), LEDGE_PAL[z]),
-                        make(ledgeRows(z, false, 200 + z), LEDGE_PAL[z])]);
-      S.img.ledge_crumble.push([make(ledgeRows(z, true, 300 + z), LEDGE_PAL[z]),
-                                make(ledgeRows(z, true, 400 + z), LEDGE_PAL[z])]);
+      // Four variants per stage, picked by row and lane, so no two ledges
+      // near each other are the same rock and there is no visible rhythm.
+      var solid = [], broken = [];
+      for (var v = 0; v < LEDGE_VARIANTS; v++) {
+        solid.push(buildLedge(z, 'rock', 1100 + z * 61 + v * 7));
+        broken.push(buildLedge(z, 'crumble', 5300 + z * 61 + v * 7));
+      }
+      S.img.ledge.push(solid);
+      S.img.ledge_crumble.push(broken);
     }
     S.img.ledge_start = buildStartLedge();
 
@@ -572,31 +684,39 @@
 
   // ---- draw helpers -------------------------------------------------------
 
-  S.LEDGE_W = 40;
+  S.LEDGE_W = LEDGE_FOOT;
   S.LEDGE_H = 10;
+  S.LEDGE_VARIANTS = LEDGE_VARIANTS;
   S.CLIMBER_W = 12;
   S.CLIMBER_H = 18;
 
   // x,y = centre-x and TOP surface y of the ledge. zone picks the palette;
   // variant alternates the decoration; dark tints the rock (0..1).
   S.drawLedge = function (ctx, x, y, type, shakeX, dark, zone, variant) {
-    var img;
+    var img, surf;
     if (type === 'start') {
       img = S.img.ledge_start;
-      ctx.drawImage(img, Math.round(x - img.width / 2), Math.round(y));
-      return;
+      surf = START_PAD;
+    } else {
+      var z = U.clamp(zone == null ? 0 : zone, 0, LEDGE_ZONES - 1);
+      var set = (type === 'crumble') ? S.img.ledge_crumble[z] : S.img.ledge[z];
+      img = set[Math.abs(variant || 0) % set.length];
+      surf = LEDGE_SURF;
     }
-    var z = U.clamp(zone == null ? 0 : zone, 0, LEDGE_ZONES - 1);
-    var set = (type === 'crumble') ? S.img.ledge_crumble[z] : S.img.ledge[z];
-    img = set[(variant || 0) % set.length];
-    var dx = Math.round(x - S.LEDGE_W / 2 + (shakeX || 0));
-    var dy = Math.round(y) - LEDGE_TOP_PAD;
+    var dx = Math.round(x - img.width / 2 + (shakeX || 0));
+    var dy = Math.round(y) - surf;
 
-    // Contact shadow under the rock so it sits in the scene.
+    // The shadow the ledge throws on the wall behind it, offset with the
+    // light and falling off over several rows. Without it the rock is a
+    // sticker; with it there is air between the ledge and the face.
+    var sw = img.width - 10, sy0 = dy + surf + LEDGE_DEPTH - 1;
     ctx.save();
-    ctx.globalAlpha = 0.22;
     ctx.fillStyle = COL.ink;
-    ctx.fillRect(dx + 4, dy + LEDGE_TOP_PAD + S.LEDGE_H - 1, S.LEDGE_W - 10, 3);
+    for (var sh = 0; sh < 4; sh++) {
+      ctx.globalAlpha = 0.26 * (1 - sh / 4) * (1 - sh / 4);
+      var inset = sh * 4;
+      ctx.fillRect(dx + 5 + inset + sh, sy0 + sh * 2, Math.max(2, sw - inset * 2), 2);
+    }
     ctx.restore();
 
     ctx.drawImage(img, dx, dy);
