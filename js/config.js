@@ -23,13 +23,13 @@ SITF.Config = {
   CAIRN_CLEAR_RADIUS: 54,
   CRUMBLE_DELAY: 0.8, CRUMBLE_RESPAWN: 2.5,
 
-  WHITEOUT_START_ROW: -10, WHITEOUT_CATCHUP_GAP: 30, WHITEOUT_CATCHUP_MULT: 1.3,
+  WHITEOUT_START_ROW: -8, WHITEOUT_CATCHUP_GAP: 12, WHITEOUT_CATCHUP_MULT: 1.5,
   CAIRN_PUSHBACK_ROWS: 4,
 
   ZONES: [
-    { name: 'TREELINE',   from: 0,   to: 49,  fogDensity: 0.955, gustInterval: 4.5, revealRows: 7, whiteoutSpeed: 0.60, crumbleChance: 0.00, mercyChance: 0.25, gustDelay: 0, crystalChance: 0.14 },
-    { name: 'THE RIDGE',  from: 50,  to: 99,  fogDensity: 0.97, gustInterval: 6.0, revealRows: 5, whiteoutSpeed: 0.70, crumbleChance: 0.18, mercyChance: 0.08, gustDelay: 0, crystalChance: 0.18 },
-    { name: 'THE SUMMIT', from: 100, to: 150, fogDensity: 0.985, gustInterval: 7.5, revealRows: 3, whiteoutSpeed: 0.80, crumbleChance: 0.28, mercyChance: 0.00, gustDelay: 1.0, crystalChance: 0.22 }
+    { name: 'TREELINE',   from: 0,   to: 49,  fogDensity: 0.955, gustInterval: 4.5, revealRows: 7, whiteoutSpeed: 0.62, crumbleChance: 0.00, mercyChance: 0.25, gustDelay: 0, crystalChance: 0.14 },
+    { name: 'THE RIDGE',  from: 50,  to: 99,  fogDensity: 0.97, gustInterval: 6.0, revealRows: 5, whiteoutSpeed: 0.78, crumbleChance: 0.18, mercyChance: 0.08, gustDelay: 0, crystalChance: 0.18 },
+    { name: 'THE SUMMIT', from: 100, to: 150, fogDensity: 0.985, gustInterval: 7.5, revealRows: 3, whiteoutSpeed: 0.92, crumbleChance: 0.28, mercyChance: 0.00, gustDelay: 1.0, crystalChance: 0.22 }
   ],
   GUST_DURATION: 1.6, GUST_WIPE_PORTION: 0.5, GUST_FADE_PORTION: 0.25,
   ALT_BASE_M: 1800, ALT_PER_ROW_M: 20,
@@ -50,9 +50,11 @@ SITF.Config = {
   STORAGE_KEY_SFX: 'sitf.sfxVol',
   STORAGE_KEY_SCORE: 'sitf.bestScore',
 
-  // Flares: a player-triggered reveal. Spent with Down or S, refilled by
-  // cairns and crystals. Deciding when to burn one is the core decision.
-  FLARES_MAX: 3, FLARE_REVEAL: 5, FLARE_START: 2,
+  // Echo step: every landing ripples the fog and shows the next ledge for a
+  // moment. Longer combos see further. Stop moving and the fog closes.
+  ECHO_HOLD: 0.50, ECHO_FADE: 0.30,
+  ECHO_ROWS_BASE: 1, ECHO_COMBO_2: 4, ECHO_COMBO_3: 8,
+  CLARITY_HOPS: 6,          // crystal pickup: +1 echo row for this many hops
   CRYSTAL_CHANCE: 0.16,
   SCORE_HOP: 10, SCORE_BLIND: 40, SCORE_CRYSTAL: 100, SCORE_CAIRN: 150,
   SCORE_SUMMIT: 1000, SCORE_TIME_BONUS_PER_SEC: 6, SCORE_TIME_PAR: 240,

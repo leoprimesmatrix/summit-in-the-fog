@@ -72,7 +72,6 @@
     F.globalReveal = 0;
     F.blowing = false;
     F.surge = 0;
-    F.flareActive = false;
   };
 
   F.addClearing = function (row, lane) {
@@ -87,16 +86,6 @@
 
   F.isGusting = function () { return F.gustProgress >= 0; };
 
-  // A flare: the player buys a reveal right now. Reuses the gust wipe so it
-  // feels like the same weather, only on demand. Fails if wind is already up.
-  F.fireFlare = function (rows) {
-    if (F.gustProgress >= 0 || F.blowing) return false;
-    F.gustPending = false;
-    F.gustReveal = rows;
-    F.gustProgress = 0;
-    F.flareActive = true;
-    return true;
-  };
 
   // Seconds until the next gust actually starts revealing.
   F.timeToGust = function () {
@@ -116,9 +105,7 @@
       F.gustProgress += dt / C.GUST_DURATION;
       if (F.gustProgress >= 1) {
         F.gustProgress = -1;
-        // A flare does not delay the natural wind; a real gust does.
-        if (!F.flareActive) F.gustTimer = zone.gustInterval;
-        F.flareActive = false;
+        F.gustTimer = zone.gustInterval;
       }
       return;
     }
@@ -270,6 +257,11 @@
         var cp = view.clearingPoints[ci];
         punchRadial(cp.x / 2, cp.y / 2, C.CAIRN_CLEAR_RADIUS / 2, 0.34, 0.5);
       }
+    }
+
+    // Echo step: an expanding ring of thinner fog from the landing point.
+    if (view.echo && view.echo.alpha > 0) {
+      punchRadial(view.echo.x / 2, view.echo.y / 2, view.echo.r / 2, view.echo.alpha * 0.55, 0.55);
     }
 
     // Summit: the whole sky clears.

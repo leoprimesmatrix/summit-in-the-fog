@@ -33,10 +33,11 @@ lanes. **Fog hides every ledge above you.** You have three ways to find the way:
   checkpoint, clear a lasting patch of fog around it, and shove the whiteout
   back down the mountain.
 
-- **Flares.** Press S or Down to fire one: the fog parts for the next five ledges
-  right now, on your terms. You start with two and carry at most three. Cairns
-  refill them; so do the crystals scattered up the route, often sitting on the
-  riskier of two ledges.
+- **Momentum.** Every landing sends a ripple through the fog that shows the
+  next ledge for half a second. Chain hops and it shows two, then three. Stop,
+  and it closes. Keep moving and the path keeps opening in front of you.
+- **Crystals** on some ledges, often on the riskier of two, pay points and
+  grant Clear Sight: one extra ripple row for the next six hops.
 
 Hop into empty fog and you slip, losing two rows and your combo.
 
@@ -55,7 +56,6 @@ land, and the whiteout climbs faster.
 | Right / D | Hop up-right |
 | Enter | Confirm |
 | Esc or P | Pause |
-| S or Down | Fire a flare |
 | M | Mute |
 | R | Restart (while paused) |
 | Q | Back to the title (while paused) |
@@ -72,13 +72,12 @@ You can also tap or click: left third, middle third, right third of the screen.
 
 ## Audio
 
-The game plays audio only from real files in `assets/audio/`, loaded with
-`HTMLAudioElement`. **No Web Audio API is used anywhere in the project.**
-
-That folder currently ships empty, so the game runs silently. It is fully
-playable that way; every missing cue is skipped with a console warning.
-There is no music by design, only sound effects and a quiet wind bed. See `assets/audio/README.md` for the file names and a list of free
-CC0 / CC-BY sources to download.
+Every sound is an original effect authored for this game and shipped as a plain
+WAV in `assets/audio/`, played with `HTMLAudioElement`. **No Web Audio API is
+used anywhere in the game.** The effects are generated offline by
+`tools/gen_sfx.js` (run it with Node to rebuild them). They are tuned to stay
+soft and short so they do not wear on you over a long climb. There is no music
+by design, only effects and a quiet wind bed; both have sliders in Settings.
 
 ## Credits
 

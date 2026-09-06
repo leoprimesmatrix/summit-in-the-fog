@@ -11,7 +11,7 @@
   var Aud = SITF.Audio;
   var COL = C.COLORS;
 
-  var climber, run, camera, shake, banner, toast, snowAcc, wispAcc, endSeq, floats, milestone;
+  var climber, run, camera, shake, banner, toast, snowAcc, wispAcc, endSeq, floats, milestone, echo;
 
   var Play = {};
 
@@ -72,8 +72,9 @@
       time: 0, slips: 0, combo: 0, bestCombo: 0, lastLandTime: -99,
       checkpointRow: 0, started: false, paused: false, over: false, zone: 0,
       settings: false,
-      score: 0, flares: C.FLARE_START, crystals: 0, blind: 0, timeBonus: 0
+      score: 0, crystals: 0, blind: 0, timeBonus: 0, clarity: 0
     };
+    echo = { t: 99, x: 0, y: 0, rows: 0 };
     floats = [];
     milestone = C.ALT_BASE_M + C.MILESTONE_M;
     camera = { y: rowY(0) };
@@ -101,7 +102,7 @@
       rowFloat: climberRowFloat(), time: run.time, slips: run.slips,
       combo: run.combo, bestCombo: run.bestCombo, checkpoint: run.checkpointRow,
       over: run.over, paused: run.paused, zone: run.zone, frontRow: F.frontRow,
-      score: run.score, flares: run.flares, crystals: run.crystals, blind: run.blind
+      score: run.score, crystals: run.crystals, blind: run.blind, clarity: run.clarity
     };
   };
 
@@ -138,19 +139,20 @@
     addFloat((label ? label + ' ' : '') + '+' + n, p.x, p.y - 22, color);
   }
 
-  function fireFlare() {
-    if (run.flares <= 0) { toast = { text: 'NO FLARES', t: 0.8 }; return; }
-    if (!F.fireFlare(C.FLARE_REVEAL)) return;
-    run.flares--;
-    Aud.play('sfx_gust', { volume: 0.7, rate: 1.35 });
-    var p = climberPos(), sy = toScreenY(p.y);
-    for (var i = 0; i < 22; i++) {
-      Part.spawn('sparkle', p.x - 4 + Math.random() * 8, sy - 14, {
-        vx: (Math.random() - 0.5) * 90, vy: -60 - Math.random() * 90,
-        life: 0.5 + Math.random() * 0.5, w: 1, h: 1,
-        color: Math.random() < 0.5 ? COL.warn : '#fff1b8', alpha: 1, layer: 'screen'
-      });
-    }
+  // How many rows the landing ripple opens: momentum sees further.
+  function echoRows() {
+    var n = C.ECHO_ROWS_BASE;
+    if (run.combo >= C.ECHO_COMBO_2) n++;
+    if (run.combo >= C.ECHO_COMBO_3) n++;
+    if (run.clarity > 0) n++;
+    return n;
+  }
+
+  // 0..1 strength of the current echo reveal.
+  function echoAlpha() {
+    if (echo.t < C.ECHO_HOLD) return 1;
+    var f = (echo.t - C.ECHO_HOLD) / C.ECHO_FADE;
+    return f >= 1 ? 0 : 1 - f;
   }
 
   // --- movement ------------------------------------------------------------
@@ -250,6 +252,13 @@
       });
     }
 
+    // The landing ripples the fog: the next ledge (or more, with momentum)
+    // shows for a moment. This is what keeps a chain alive.
+    var lp = climberPos();
+    echo = { t: 0, x: lp.x, y: lp.y, rows: echoRows() };
+    if (run.clarity > 0) run.clarity--;
+    if (echo.rows >= 2) Aud.play('sfx_echo', { volume: 0.5 + 0.15 * echo.rows });
+
     // Score: every ledge pays, combos multiply, hidden ledges pay extra.
     run.score += C.SCORE_HOP * Math.min(5, Math.max(1, run.combo));
     if (climber.blindHop) {
@@ -271,10 +280,9 @@
       if (fh && fh.crystal) {
         fh.crystal = false;
         run.crystals++;
-        var gained = run.flares < C.FLARES_MAX;
-        if (gained) run.flares++;
-        addScore(C.SCORE_CRYSTAL, gained ? '+1 FLARE' : 'CRYSTAL', COL.accent);
-        Aud.play('sfx_cairn', { volume: 0.7, rate: 1.25 });
+        run.clarity = C.CLARITY_HOPS;
+        addScore(C.SCORE_CRYSTAL, 'CLEAR SIGHT', COL.accent);
+        Aud.play('sfx_crystal', { volume: 0.8 });
         var cp = climberPos(), csy = toScreenY(cp.y);
         for (var ci = 0; ci < 10; ci++) {
           Part.spawn('sparkle', cp.x - 6 + Math.random() * 12, csy - 8 - Math.random() * 8, {
@@ -306,9 +314,8 @@
     F.addClearing(row.index, climber.lane);
     F.pushWhiteout();
     Aud.play('sfx_cairn', { volume: 0.9 });
-    run.flares = C.FLARES_MAX;
     run.score += C.SCORE_CAIRN;
-    toast = { text: 'CHECKPOINT - FLARES REFILLED', t: 1.6 };
+    toast = { text: 'CHECKPOINT', t: 1.4 };
 
     var p = climberPos();
     var sy = toScreenY(p.y);
@@ -432,6 +439,7 @@
     if (shake.t > 0) shake.t -= dt;
     if (banner.t > 0) banner.t -= dt;
     if (toast.t > 0) toast.t -= dt;
+    echo.t += dt;
     for (var fi = floats.length - 1; fi >= 0; fi--) {
       floats[fi].t += dt;
       floats[fi].y -= 22 * dt;
@@ -546,10 +554,6 @@
       var a = acts[i];
       if (a === 'mute') { Aud.toggleMuted(); continue; }
       if (run.over) continue;
-      if ((a === 'down' || a === 'settings') && !run.paused && !run.over) {
-        fireFlare();
-        continue;
-      }
       if (a === 'settings' && run.paused) {
         Aud.ui();
         run.settings = true;
@@ -626,7 +630,8 @@
       density: U.zoneField(U.clamp(rf, 0, C.ROWS), 'fogDensity', 8),
       color: Par.fogColorAt(rf),
       lanternTargets: lanternTargets,
-      clearingPoints: clearingPoints
+      clearingPoints: clearingPoints,
+      echo: { x: echo.x, y: toScreenY(echo.y) - 8, r: 26 + Math.min(1, echo.t / 0.5) * 70, alpha: echoAlpha() }
     });
 
     ctx.save();
@@ -697,6 +702,10 @@
         a = Math.max(a, F.gustAlpha() * w);
       }
     }
+
+    // Echo step: the rows just above the last landing, briefly.
+    var ea = echoAlpha();
+    if (ea > 0 && r > climber.row && r <= climber.row + echo.rows) a = Math.max(a, ea);
 
     // Lantern: the single next row, while standing still.
     if (F.lanternAlpha > 0 && climber.state === 'idle' && r === climber.row + 1) {
@@ -833,11 +842,11 @@
     Font.draw(ctx, String(run.score), C.W - 44, 20,
               { scale: 1, color: COL.accent, shadow: COL.ink, align: 'right' });
 
-    // Flares in hand.
-    for (var fi2 = 0; fi2 < C.FLARES_MAX; fi2++) {
-      ctx.drawImage(fi2 < run.flares ? S.img.flare : S.img.flare_empty, 8 + fi2 * 8, 20);
+    // Clear sight buff from a crystal.
+    if (run.clarity > 0) {
+      ctx.drawImage(S.img.crystal, 8, 20);
+      Font.draw(ctx, 'CLEAR SIGHT ' + run.clarity, 16, 20, { scale: 1, color: COL.accent, shadow: COL.ink });
     }
-    Font.draw(ctx, 'FLARE  S', 8 + C.FLARES_MAX * 8 + 4, 20, { scale: 1, color: COL.textDim, shadow: COL.ink });
 
     // Gust anticipation: three lines that pulse just before the wind arrives.
     var tg = F.timeToGust();

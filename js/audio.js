@@ -13,9 +13,9 @@
   var NAMES = [
     'amb_wind',
     'sfx_gust', 'sfx_hop', 'sfx_land', 'sfx_slip', 'sfx_cairn',
-    'sfx_crumble', 'sfx_whiteout', 'sfx_summit', 'sfx_ui'
+    'sfx_crumble', 'sfx_whiteout', 'sfx_summit', 'sfx_ui', 'sfx_crystal', 'sfx_echo'
   ];
-  var EXTS = ['ogg', 'mp3', 'wav'];
+  var EXTS = ['wav', 'ogg', 'mp3'];
   var DIR = 'assets/audio/';
 
   var VOL = { music: 0.22, ambient: 0.14, sfx: 0.7, ui: 0.5 };

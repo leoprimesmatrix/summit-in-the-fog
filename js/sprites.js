@@ -375,24 +375,7 @@
       '.abb.',
       '..b..'
     ], { 'w': '#ffffff', 'a': COL.accent, 'b': '#1e9c86' });
-    S.img.flare = make([
-      '..f..',
-      '.fyf.',
-      '.fyf.',
-      'fyyyf',
-      'fyyyf',
-      '.fff.',
-      '..d..'
-    ], { 'f': COL.warn, 'y': '#fff1b8', 'd': COL.rockDark });
-    S.img.flare_empty = make([
-      '..d..',
-      '.d.d.',
-      '.d.d.',
-      'd...d',
-      'd...d',
-      '.ddd.',
-      '..d..'
-    ], { 'd': COL.textDim });
+
   };
 
   // ---- draw helpers -------------------------------------------------------
