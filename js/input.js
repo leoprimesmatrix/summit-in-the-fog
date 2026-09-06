@@ -1,6 +1,7 @@
 (function () {
   'use strict';
   var C = SITF.Config;
+  var U = SITF.Util;
 
   var I = {
     hop: null,          // {dir, t}
@@ -36,6 +37,9 @@
     'ArrowUp': 0, 'KeyW': 0, 'Space': 0
   };
 
+  // Two-lane leaps: their own keys, or shift with a direction.
+  var LEAP_KEYS = { 'KeyQ': -2, 'KeyE': 2 };
+
   function onKeyDown(e) {
     if (e.repeat) return;
     var code = e.code;
@@ -48,8 +52,16 @@
     I.anyPress = true;
     if (SITF.Audio) SITF.Audio.unlock();
 
+    if (LEAP_KEYS.hasOwnProperty(code)) {
+      queueHop(LEAP_KEYS[code]);
+      I.pushAction(LEAP_KEYS[code] < 0 ? 'left' : 'right');
+      return;
+    }
+
     if (HOP_KEYS.hasOwnProperty(code)) {
-      queueHop(HOP_KEYS[code]);
+      var dir = HOP_KEYS[code];
+      if (e.shiftKey && dir !== 0) dir *= 2;
+      queueHop(dir);
       // Menus read these as navigation.
       if (HOP_KEYS[code] === -1) I.pushAction('left');
       else if (HOP_KEYS[code] === 1) I.pushAction('right');
@@ -64,7 +76,8 @@
       case 'KeyP': I.pushAction('pause'); break;
       case 'KeyM': I.pushAction('mute'); break;
       case 'KeyR': I.pushAction('restart'); break;
-      case 'KeyQ': I.pushAction('quit'); break;
+      // Q and E are the two-lane leaps now, so leaving a run is T (title).
+      case 'KeyT': case 'Backspace': I.pushAction('quit'); break;
       case 'ArrowDown': I.pushAction('down'); break;
       case 'KeyS': I.pushAction('settings'); break;
     }
@@ -75,9 +88,14 @@
     I.anyPress = true;
     if (SITF.Audio) SITF.Audio.unlock();
     if (mode === 'play') {
-      if (x < C.W / 3) queueHop(-1);
-      else if (x > C.W * 2 / 3) queueHop(1);
-      else queueHop(0);
+      // Tap the lane you want: the screen is split into as many columns as
+      // there are lanes, and the hop is relative to where the climber stands.
+      var lanes = C.LANE_X.length;
+      var col = U.clamp(Math.floor(x / (C.W / lanes)), 0, lanes - 1);
+      var here = SITF.states.play && SITF.states.play.snapshot
+        ? (SITF.states.play.snapshot() || {}).lane : null;
+      if (here == null) { queueHop(0); return; }
+      queueHop(U.clamp(col - here, -C.MAX_HOP, C.MAX_HOP));
     } else {
       I.pushAction('confirm');
     }

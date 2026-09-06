@@ -309,7 +309,8 @@
 
   // Wide starting ledge, 216 x 12, grass tufts on top.
   function buildStartLedge() {
-    var W = 216, H = 12;
+    // Wide enough to sit under every lane: this is the camp terrace.
+    var W = 348, H = 12;
     var cv = U.makeCanvas(W, H);
     var cx = cv.getContext('2d');
     var rnd = U.mulberry32(7);

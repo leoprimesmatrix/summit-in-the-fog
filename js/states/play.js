@@ -29,8 +29,9 @@
     var x, y;
     if (climber.state === 'hop') {
       var t = U.clamp(climber.t, 0, 1);
+      var arc = (climber.hopDist >= 2) ? C.LEAP_ARC : C.HOP_ARC;
       x = U.lerp(climber.fromX, climber.toX, t);
-      y = U.lerp(climber.fromY, climber.toY, t) - Math.sin(Math.PI * t) * C.HOP_ARC;
+      y = U.lerp(climber.fromY, climber.toY, t) - Math.sin(Math.PI * t) * arc;
     } else if (climber.state === 'slip') {
       var ts = U.clamp(climber.t, 0, 1);
       x = U.lerp(climber.fromX, climber.toX, ts);
@@ -68,10 +69,11 @@
     Part.clear();
     SITF.Sky.reset();
 
+    var startLane = Math.floor(C.LANE_X.length / 2);
     climber = {
-      row: 0, lane: 1, state: 'idle', t: 0,
-      fromX: laneX(1), fromY: rowY(0), toX: laneX(1), toY: rowY(0),
-      targetRow: 0, targetLane: 1,
+      row: 0, lane: startLane, state: 'idle', t: 0,
+      fromX: laneX(startLane), fromY: rowY(0), toX: laneX(startLane), toY: rowY(0),
+      targetRow: 0, targetLane: startLane, hopDist: 0,
       facing: 1, frame: 0, idleTime: 0, blink: 0, landT: 0, trailAcc: 0
     };
     run = {
@@ -120,7 +122,7 @@
     if (!C.DEBUG || run.over) return false;
     var r = U.clamp(climber.row + rows, 0, C.ROWS);
     climber.row = r;
-    climber.lane = M.rows[r].footholds[0].lane;
+    climber.lane = U.clamp(M.rows[r].footholds[0].lane, 0, laneMax());
     climber.state = 'idle';
     climber.t = 0;
     camera.y = rowY(r);
@@ -182,10 +184,14 @@
 
   // --- movement ------------------------------------------------------------
 
+  function laneMax() { return C.LANE_X.length - 1; }
+
   function attemptHop(dir) {
     var targetRow = climber.row + 1;
     var targetLane = climber.lane + dir;
-    if (dir !== 0) climber.facing = dir;
+    if (dir !== 0) climber.facing = dir > 0 ? 1 : -1;
+    // A two-lane leap is slower and higher: committing to one is a real cost.
+    climber.hopDist = Math.abs(dir);
 
     var pos = climberPos();
     climber.fromX = pos.x;
@@ -196,7 +202,7 @@
     climber.landT = 0;
     F.resetLantern();
 
-    var inRange = (targetLane >= 0 && targetLane <= 2);
+    var inRange = (targetLane >= 0 && targetLane <= laneMax());
     var fh = inRange ? M.footholdAt(targetRow, targetLane) : null;
 
     // Push-off dust behind the feet.
@@ -219,8 +225,8 @@
       Aud.play('sfx_hop', { volume: 0.7, rate: 0.95 + Math.random() * 0.1 });
     } else {
       // A hop into empty fog: lunge out, then fall back down the mountain.
-      climber.targetLane = U.clamp(targetLane, 0, 2);
-      climber.toX = laneX(U.clamp(targetLane, 0, 2)) + (inRange ? 0 : dir * 34);
+      climber.targetLane = U.clamp(targetLane, 0, laneMax());
+      climber.toX = laneX(U.clamp(targetLane, 0, laneMax())) + (inRange ? 0 : (dir > 0 ? 34 : -34));
       climber.toY = rowY(targetRow) + 6;
       climber.state = 'slip';
       if (!run.started) run.started = true;
@@ -245,7 +251,7 @@
       var best = null, bestD = 99;
       for (var i = 0; i < row.footholds.length; i++) {
         var f = row.footholds[i];
-        var fl = (f.type === 'start') ? U.clamp(lane, 0, 2) : f.lane;
+        var fl = (f.type === 'start') ? U.clamp(lane, 0, laneMax()) : f.lane;
         var d = Math.abs(fl - lane);
         if (d < bestD) { bestD = d; best = fl; }
       }
@@ -556,7 +562,9 @@
         break;
 
       case 'hop': {
-        var hopTime = (run.combo >= C.COMBO_FAST_AT) ? C.COMBO_HOP_TIME : C.HOP_TIME;
+        var hopTime = (climber.hopDist >= 2)
+          ? C.LEAP_TIME
+          : ((run.combo >= C.COMBO_FAST_AT) ? C.COMBO_HOP_TIME : C.HOP_TIME);
         climber.t += dt / hopTime;
         // A faint trail behind a fast climber shows the momentum.
         if (run.combo >= 3) {
@@ -786,6 +794,10 @@
     ctx.translate(Math.round(sx), Math.round(sy));
 
     Par.draw(ctx, rf, climbPx, SITF.time);
+
+    // The face itself, in front of the painted range and behind the fog: it
+    // is revealed by the same weather that reveals the route.
+    SITF.RockFace.draw(ctx, toScreenY, rf);
 
     ctx.restore();
 
@@ -1148,7 +1160,7 @@
 
     // Beside the climber, not above: the row above is where the next ledge is.
     if (run.combo >= 2 && climber.state !== 'summit') {
-      var right = climber.lane !== 2;
+      var right = climber.lane < laneMax();
       var tagX = right ? p.x + 16 : p.x - 16;
       var hot = run.combo >= 8;
       Font.draw(ctx, 'X' + run.combo, tagX, psy - S.CLIMBER_H + 2, {
@@ -1303,7 +1315,7 @@
     Font.draw(ctx, 'PAUSED', C.W / 2, 102, { scale: 3, align: 'center', color: COL.text, shadow: '#000' });
 
     var items = [
-      ['ESC', 'RESUME'], ['R', 'RESTART'], ['Q', 'TITLE'], ['S', 'SETTINGS'],
+      ['ESC', 'RESUME'], ['R', 'RESTART'], ['T', 'TITLE'], ['S', 'SETTINGS'],
       ['M', Aud.muted ? 'UNMUTE' : 'MUTE']
     ];
     U.softPanel(ctx, C.W / 2 - 70, 150, 140, items.length * 16 + 14, 0.5);

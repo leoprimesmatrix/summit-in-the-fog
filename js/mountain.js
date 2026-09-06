@@ -12,15 +12,30 @@
     return { lane: lane, type: type, state: 'ok', timer: 0, debris: 0, crystal: false, fogAlpha: 0 };
   }
 
-  // Lanes reachable from every lane in `prev` with a single one-lane step.
+  function laneCount() { return C.LANE_X.length; }
+  function maxHop() { return C.MAX_HOP; }
+
+  // Lanes reachable from EVERY lane in `prev`. A foothold here guarantees no
+  // one below is stranded, whichever branch of the route they took.
   function reachable(prev) {
     var out = [];
-    for (var L = 0; L < 3; L++) {
+    for (var L = 0; L < laneCount(); L++) {
       var ok = true;
       for (var i = 0; i < prev.length; i++) {
-        if (Math.abs(L - prev[i]) > 1) { ok = false; break; }
+        if (Math.abs(L - prev[i]) > maxHop()) { ok = false; break; }
       }
       if (ok) out.push(L);
+    }
+    return out;
+  }
+
+  // Lanes reachable from AT LEAST ONE lane in `prev`: where a fork may sit.
+  function reachableAny(prev) {
+    var out = [];
+    for (var L = 0; L < laneCount(); L++) {
+      for (var i = 0; i < prev.length; i++) {
+        if (Math.abs(L - prev[i]) <= maxHop()) { out.push(L); break; }
+      }
     }
     return out;
   }
@@ -29,19 +44,21 @@
     var rng = U.mulberry32(seed);
     var rows = [];
 
-    // Row 0: wide starting ledge under all three lanes.
+    // Row 0: wide starting ledge under the middle lanes.
+    var mid = Math.floor(laneCount() / 2);
     rows.push({
       index: 0,
-      footholds: [makeFoothold(1, 'start')],
+      footholds: [makeFoothold(mid, 'start')],
       cairn: null,
       summit: false,
       zone: 0
     });
 
-    var prevLanes = [0, 1, 2];
-    var lastLane = 1;
+    var prevLanes = [mid - 1, mid, mid + 1];
+    var lastLane = mid;
     var streak = 0;
     var lastWasCrumble = false;
+    var lastStep = 0;
 
     for (var r = 1; r <= C.ROWS; r++) {
       var zi = U.zoneIndexOf(r);
@@ -49,22 +66,32 @@
       var reach = reachable(prevLanes);
 
       // Force a change of lane after a long straight run so the path zig-zags.
-      if (streak >= 4) {
+      if (streak >= 3) {
         var alt = reach.filter(function (l) { return l !== lastLane; });
         if (alt.length > 0) reach = alt;
       }
 
-      // Weighted pick: mild bias against repeating the same lane.
-      var weights = reach.map(function (l) { return l === lastLane ? 0.30 : 0.35; });
+      // Weighted pick. Two-lane steps are the interesting ones, so their
+      // share rises with the stage; drifting back over the same lane twice
+      // running is the least interesting, so it is damped.
+      var weights = reach.map(function (l) {
+        var step = Math.abs(l - lastLane);
+        var w = (step === 0) ? 0.16 : (step === 1 ? 0.55 : zone.leapChance + 0.10);
+        if (step !== 0 && (l - lastLane) * lastStep < 0) w *= 0.7;   // no zig-zag jitter
+        // Keep the route off the walls: edge lanes are half as likely.
+        if (l === 0 || l === laneCount() - 1) w *= 0.55;
+        return w;
+      });
       var total = weights.reduce(function (a, b) { return a + b; }, 0);
       var pick = rng() * total;
       var lane = reach[reach.length - 1];
-      for (var w = 0; w < reach.length; w++) {
-        pick -= weights[w];
-        if (pick <= 0) { lane = reach[w]; break; }
+      for (var w2 = 0; w2 < reach.length; w2++) {
+        pick -= weights[w2];
+        if (pick <= 0) { lane = reach[w2]; break; }
       }
 
       streak = (lane === lastLane) ? streak + 1 : 1;
+      lastStep = lane - lastLane;
       lastLane = lane;
 
       var isSummit = (r === C.ROWS);
@@ -72,24 +99,28 @@
       var footholds = [makeFoothold(lane, isSummit ? 'summit' : 'rock')];
 
       if (!isSummit && !hasCairn) {
-        // Mercy row: a second, adjacent foothold so a guess has two chances.
-        if (rng() < zone.mercyChance) {
-          var cands = [lane - 1, lane + 1].filter(function (l) {
-            return l >= 0 && l <= 2 && reach.indexOf(l) >= 0;
+        // A fork: a second foothold on the same row, reachable from at least
+        // one foothold below. It opens a parallel line up the face — usually
+        // the greedier one, since the spare ledge carries the crystal.
+        var forkOdds = zone.forkChance + zone.mercyChance * 0.5;
+        if (rng() < forkOdds) {
+          var any = reachableAny(prevLanes);
+          var cands = any.filter(function (l) {
+            var d = Math.abs(l - lane);
+            return d >= 1 && d <= maxHop();
           });
           if (cands.length > 0) {
             var extra = cands[Math.floor(rng() * cands.length) % cands.length];
-            var mercy = makeFoothold(extra, 'rock');
-            // The tempting lane: the spare ledge carries a crystal more often.
-            if (rng() < 0.6) mercy.crystal = true;
-            footholds.push(mercy);
+            var fork = makeFoothold(extra, 'rock');
+            if (rng() < 0.6) fork.crystal = true;
+            footholds.push(fork);
           }
         }
         if (!footholds[0].crystal && footholds.length === 1 && rng() < zone.crystalChance) {
           footholds[0].crystal = true;
         }
 
-        // Crumbling ledge: never two rows in a row, never on a mercy row.
+        // Crumbling ledge: never two rows running, never the only way up.
         if (footholds.length === 1 && !lastWasCrumble && rng() < zone.crumbleChance) {
           footholds[0].type = 'crumble';
           lastWasCrumble = true;
@@ -127,7 +158,7 @@
       for (var i = 0; i < cur.length; i++) {
         var ok = prevIsStart;
         for (var j = 0; !ok && j < prev.length; j++) {
-          if (Math.abs(cur[i].lane - prev[j].lane) <= 1) ok = true;
+          if (Math.abs(cur[i].lane - prev[j].lane) <= C.MAX_HOP) ok = true;
         }
         if (!ok) {
           bad++;
@@ -137,7 +168,7 @@
       for (var k = 0; k < prev.length; k++) {
         var can = prevIsStart;
         for (var q = 0; !can && q < cur.length; q++) {
-          if (Math.abs(cur[q].lane - prev[k].lane) <= 1) can = true;
+          if (Math.abs(cur[q].lane - prev[k].lane) <= C.MAX_HOP) can = true;
         }
         if (!can) {
           bad++;
@@ -210,7 +241,7 @@
   M.rowY = function (r) { return -r * C.ROW_H; };
 
   M.laneX = function (lane) {
-    return C.LANE_X[U.clamp(lane, 0, 2)];
+    return C.LANE_X[U.clamp(lane, 0, C.LANE_X.length - 1)];
   };
 
   M.altitudeOf = function (rowFloat) {
