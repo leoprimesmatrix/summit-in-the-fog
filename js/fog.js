@@ -166,9 +166,11 @@
 
   // --- lantern ------------------------------------------------------------
 
-  F.updateLantern = function (dt, idleTime) {
-    if (idleTime >= C.LANTERN_DELAY) {
-      F.lanternAlpha = Math.min(1, F.lanternAlpha + dt / C.LANTERN_FADE);
+  F.updateLantern = function (dt, idleTime, fast) {
+    var delay = fast ? 0.04 : C.LANTERN_DELAY;
+    var fade = fast ? 0.16 : C.LANTERN_FADE;
+    if (idleTime >= delay) {
+      F.lanternAlpha = Math.min(1, F.lanternAlpha + dt / fade);
     } else {
       F.lanternAlpha = 0;
     }
@@ -310,9 +312,16 @@
       }
     }
 
-    // Echo step: an expanding ring of thinner fog from the landing point.
+    // The climber's own body pushes a little fog aside as they land.
     if (view.echo && view.echo.alpha > 0) {
       punchRadial(view.echo.x / 2, view.echo.y / 2, view.echo.r / 2, view.echo.alpha * 0.55, 0.55);
+    }
+
+    // A burning flare drives the fog back around itself: the one reveal you
+    // can see happening rather than simply having.
+    if (view.flare && view.flare.alpha > 0.01) {
+      punchRadial(view.flare.x / 2, view.flare.y / 2, view.flare.radius / 2,
+                  view.flare.alpha * 0.9, 0.35);
     }
 
     // Summit: the whole sky clears.

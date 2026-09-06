@@ -9,7 +9,10 @@
   };
 
   function makeFoothold(lane, type) {
-    return { lane: lane, type: type, state: 'ok', timer: 0, debris: 0, crystal: false, fogAlpha: 0 };
+    return {
+      lane: lane, type: type, state: 'ok', timer: 0, debris: 0,
+      crystal: false, fogAlpha: 0, memory: 0
+    };
   }
 
   function laneCount() { return C.LANE_X.length; }

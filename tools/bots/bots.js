@@ -73,6 +73,8 @@
   //   restEvery    hop count between deliberate pauses (0 = never rest)
   //   restFor      seconds of each pause
   //   greedy       detour for crystals when there is a choice
+  //   axe          throw the axe when nothing above is known
+  //   flare        fire a flare when nothing is known and the axe is spent
   B.run = function (opts) {
     opts = opts || {};
     var cadence = opts.cadence != null ? opts.cadence : 0.5;
@@ -82,6 +84,8 @@
     var restEvery = opts.restEvery || 0;
     var restFor = opts.restFor || 0;
     var greedy = !!opts.greedy;
+    var useAxe = !!opts.axe;
+    var useFlare = !!opts.flare;
 
     var P = play(), I = SITF.Input, F = SITF.Fog;
     freshRun();
@@ -90,6 +94,7 @@
     var st = {
       opts: { cadence: cadence, guess: guess, memory: useMemory, rest: restEvery ? restEvery + 'x' + restFor : 'none' },
       hops: 0, seen: 0, remembered: 0, guesses: 0, waits: 0,
+      axes: 0, flares: 0,
       idleSeconds: 0, minGapRows: 99, deaths: [], frames: 0
     };
     var lastHop = -99, sinceRest = 0, pauseUntil = -1, idleStart = null;
@@ -127,6 +132,18 @@
             if (greedy) { var cr = vis.filter(function (o) { return o.crystal; }); if (cr.length) pick = cr[0]; }
           } else if (useMemory && rem.length) {
             pick = rem[0]; how = 'remembered';
+          } else if (useAxe && SITF.Tools && SITF.Tools.axeReady() &&
+                     (SITF.time - idleStart) > 0.5) {
+            // Nothing known above: probe a lane rather than guess at one.
+            var probe = [0, -1, 1][st.axes % 3];
+            SITF.Input.tool = { kind: 'axe', dir: probe, t: SITF.time };
+            st.axes++;
+            lastHop = SITF.time - cadence * 0.4;
+          } else if (useFlare && SITF.Tools && SITF.Tools.flares > 0 &&
+                     (SITF.time - idleStart) > 1.6) {
+            SITF.Input.tool = { kind: 'flare', dir: 0, t: SITF.time };
+            st.flares++;
+            lastHop = SITF.time;
           } else if (guess === 'always' || (guess === 'wait' && (SITF.time - idleStart) > 1.4)) {
             var reach = C().MAX_HOP != null ? C().MAX_HOP : 1;
             var dirs = [];
@@ -174,12 +191,13 @@
   // The standard battery. Any change to the reveal economy or the storm
   // should move these numbers in a direction we can argue for.
   B.PROFILES = [
-    { name: 'expert',    cadence: 0.35, guess: 'wait' },
-    { name: 'competent', cadence: 0.5,  guess: 'wait' },
-    { name: 'steady',    cadence: 0.8,  guess: 'wait' },
-    { name: 'cautious',  cadence: 1.3,  guess: 'never' },
-    { name: 'hesitant',  cadence: 0.5,  guess: 'wait', restEvery: 6, restFor: 2 },
-    { name: 'no-memory', cadence: 0.5,  guess: 'wait', useMemory: false },
+    { name: 'expert',    cadence: 0.35, guess: 'wait', axe: true, flare: true },
+    { name: 'competent', cadence: 0.5,  guess: 'wait', axe: true, flare: true },
+    { name: 'steady',    cadence: 0.8,  guess: 'wait', axe: true },
+    { name: 'cautious',  cadence: 1.3,  guess: 'never', axe: true },
+    { name: 'hesitant',  cadence: 0.5,  guess: 'wait', axe: true, restEvery: 6, restFor: 2 },
+    { name: 'no-tools',  cadence: 0.5,  guess: 'wait' },
+    { name: 'no-memory', cadence: 0.5,  guess: 'wait', useMemory: false, axe: true },
     { name: 'reckless',  cadence: 0.3,  guess: 'always' }
   ];
 
@@ -192,7 +210,8 @@
       rows.push({
         profile: p.name, result: r.result, row: r.row, time: r.time,
         hops: r.hops, seen: r.seen, mem: r.remembered, guesses: r.guesses,
-        guessRate: r.guessRate, slips: r.slips, blind: r.blind,
+        guessRate: r.guessRate, axes: r.axes, flares: r.flares,
+        slips: r.slips, blind: r.blind,
         score: r.score, minGap: r.minGapRows, waited: r.waits
       });
     }

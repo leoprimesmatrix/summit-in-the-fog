@@ -114,6 +114,18 @@
           p.x += p.vx * dt + Math.sin(SITF.time * 0.8 + p.seed) * 0.25;
           p.y += p.vy * dt;
           break;
+        case 'spark':
+          // Struck off rock: thrown out hard, then it drops and dies.
+          p.vy += 210 * dt;
+          p.x += p.vx * dt;
+          p.y += p.vy * dt;
+          p.vx *= 0.92;
+          break;
+        case 'smoke':
+          p.x += p.vx * dt + Math.sin(SITF.time * 1.1 + p.seed) * 0.4;
+          p.y += p.vy * dt;
+          p.vy *= 0.96;
+          break;
         case 'ring':
           break;
         default: // streak, wisp, trail
@@ -150,6 +162,13 @@
           break;
         case 'leaf':
           a *= Math.min(1, t * 4); break;
+        case 'spark':
+          a *= t * t; break;
+        case 'smoke':
+          a *= Math.sin(Math.PI * (1 - t)) * 0.9;
+          w = p.w + Math.round((p.grow || 2) * (1 - t));
+          h = w;
+          break;
         case 'mote':
           a *= Math.sin(Math.PI * (1 - t)); break;
         case 'ring': {

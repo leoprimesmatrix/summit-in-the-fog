@@ -11,11 +11,25 @@
   // title screen, or as an overlay drawn by the play state while paused, so
   // a run in progress is never reset just to nudge a volume.
 
-  var ITEMS = ['music', 'sfx', 'mute', 'back'];
-  var LABELS = { music: 'WIND VOLUME', sfx: 'EFFECTS VOLUME', mute: 'MUTE ALL', back: 'BACK' };
+  var ITEMS = ['guide', 'music', 'sfx', 'mute', 'back'];
+  var LABELS = {
+    guide: 'GUIDE MODE', music: 'AMBIENCE VOLUME', sfx: 'EFFECTS VOLUME',
+    mute: 'MUTE ALL', back: 'BACK'
+  };
   var STEP = 0.1;
 
   var Panel = { sel: 0, t: 0, flash: 0 };
+
+  // Guide mode lights the route for you. It is the accessibility option, not
+  // a difficulty: a guided run is scored at half and sets no records.
+  var guide = U.storageGet(C.STORAGE_KEY_GUIDE) === '1';
+  SITF.Settings = {
+    guide: function () { return guide; },
+    setGuide: function (v) {
+      guide = !!v;
+      U.storageSet(C.STORAGE_KEY_GUIDE, guide ? '1' : '0');
+    }
+  };
 
   Panel.open = function () {
     Panel.sel = 0;
@@ -32,6 +46,9 @@
       Aud.play('sfx_land', { volume: 0.8 });
     } else if (item === 'mute') {
       Aud.toggleMuted();
+      Aud.ui();
+    } else if (item === 'guide') {
+      SITF.Settings.setGuide(!guide);
       Aud.ui();
     }
     Panel.flash = 0.15;
@@ -51,7 +68,7 @@
       else if (a === 'right') adjust(item, 1);
       else if (a === 'confirm') {
         if (item === 'back') { leave = true; Aud.ui(); }
-        else if (item === 'mute') adjust(item, 0);
+        else if (item === 'mute' || item === 'guide') adjust(item, 0);
         else adjust(item, 1);
       }
       else if (a === 'pause' || a === 'quit') { leave = true; Aud.ui(); }
@@ -105,6 +122,9 @@
       } else if (item === 'mute') {
         Font.draw(ctx, Aud.muted ? 'ON' : 'OFF', valueX, y,
                   { scale: 1, align: 'right', color: Aud.muted ? COL.warn : COL.text });
+      } else if (item === 'guide') {
+        Font.draw(ctx, guide ? 'ON  HALF SCORE' : 'OFF', valueX, y,
+                  { scale: 1, align: 'right', color: guide ? COL.warn : COL.text });
       }
     }
 

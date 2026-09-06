@@ -58,12 +58,26 @@ SITF.Config = {
   STORAGE_KEY_MUSIC: 'sitf.musicVol',
   STORAGE_KEY_SFX: 'sitf.sfxVol',
   STORAGE_KEY_SCORE: 'sitf.bestScore',
+  STORAGE_KEY_GUIDE: 'sitf.guide',
 
-  // Echo step: every landing ripples the fog and shows the next ledge for a
-  // moment. Longer combos see further. Stop moving and the fog closes.
+  // A landing displaces the fog around your feet. It is atmosphere, not
+  // information: it never shows what is on the row above.
   ECHO_HOLD: 0.50, ECHO_FADE: 0.30,
-  ECHO_ROWS_BASE: 1, ECHO_COMBO_2: 4, ECHO_COMBO_3: 8,
-  CLARITY_HOPS: 6,          // crystal pickup: +1 echo row for this many hops
+
+  // The toolkit. The lantern reads across (all lanes, one row), the axe
+  // reads up (one lane, four rows), the flare reads both and runs out.
+  AXE_TIME: 0.42,           // seconds in flight, during which you cannot hop
+  AXE_ROWS: 4,
+  AXE_HOLD: 2.6, AXE_FADE: 1.0, AXE_COOLDOWN: 0.30,
+  FLARE_COUNT: 3, FLARE_ROWS: 10,
+  FLARE_RISE: 0.45, FLARE_BURN: 2.6, FLARE_FADE: 0.8,
+
+  // A ledge you have seen stays as a fading outline: remembering the gust is
+  // a skill, so the game has to let you hold what you saw.
+  MEMORY_HOLD: 6.0, MEMORY_ALPHA: 0.62,
+
+  CLARITY_HOPS: 6,          // crystal pickup: the lantern is instant and
+                            // reaches two rows, for this many hops
   CRYSTAL_CHANCE: 0.16,
 
   // Ledges ease into/out of visibility instead of popping; asymmetric so a

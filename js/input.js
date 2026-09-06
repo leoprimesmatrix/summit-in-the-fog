@@ -5,6 +5,7 @@
 
   var I = {
     hop: null,          // {dir, t}
+    tool: null,         // {kind:'axe'|'flare', dir, t}
     actionQueue: [],    // 'confirm' | 'pause' | 'mute' | 'restart' | 'quit'
     anyPress: false
   };
@@ -22,7 +23,17 @@
     return d;
   };
 
-  I.clearHop = function () { I.hop = null; };
+  I.clearHop = function () { I.hop = null; I.tool = null; };
+
+  function queueTool(kind, dir) { I.tool = { kind: kind, dir: dir, t: SITF.time }; }
+
+  I.takeTool = function () {
+    if (!I.tool) return null;
+    if (SITF.time - I.tool.t > C.INPUT_BUFFER) { I.tool = null; return null; }
+    var t = I.tool;
+    I.tool = null;
+    return t;
+  };
 
   I.pushAction = function (a) { I.actionQueue.push(a); };
   I.takeActions = function () {
@@ -40,6 +51,10 @@
   // Two-lane leaps: their own keys, or shift with a direction.
   var LEAP_KEYS = { 'KeyQ': -2, 'KeyE': 2 };
 
+  // The axe keys sit directly under the hop keys, in the same left / straight
+  // / right shape, so "probe where I might hop" needs no explaining.
+  var AXE_KEYS = { 'KeyZ': -1, 'KeyX': 0, 'KeyC': 1 };
+
   function onKeyDown(e) {
     if (e.repeat) return;
     var code = e.code;
@@ -51,6 +66,12 @@
 
     I.anyPress = true;
     if (SITF.Audio) SITF.Audio.unlock();
+
+    if (AXE_KEYS.hasOwnProperty(code)) {
+      queueTool('axe', AXE_KEYS[code]);
+      return;
+    }
+    if (code === 'KeyF') { queueTool('flare', 0); return; }
 
     if (LEAP_KEYS.hasOwnProperty(code)) {
       queueHop(LEAP_KEYS[code]);

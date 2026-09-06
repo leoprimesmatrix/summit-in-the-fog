@@ -21,31 +21,39 @@ rising behind you swallows the mountain. Then do it faster.
 
 ## The idea
 
-The path up the mountain is a chain of rock ledges, one per row, in one of three
-lanes. **Fog hides every ledge above you.** You have three ways to find the way:
+The path up the mountain is a chain of rock ledges, one per row, spread across
+five lanes on a rock face. **Fog hides every ledge above you**, and information
+is never free: each way of finding the route answers a different question, and
+each one costs something.
 
-- **Gusts.** Every few seconds the wind sweeps across and thins the fog,
-  showing the next several ledges at once. Memorise them and chain your hops
-  blind before the fog closes back in.
-- **Your lantern.** Stand still for a moment and it finds the single next
-  ledge. Always safe, always slow, and the whiteout is still climbing.
+- **Your lantern** reads *across*: stand still and it lights every lane on the
+  row above. Always safe, always slow, and the whiteout is still climbing.
+- **Your axe** reads *up*: throw it up a lane and it sparks off the first rock
+  it finds, lighting that lane for four rows. You cannot hop while it is in
+  the air.
+- **Flares** read both at once: ten rows, every lane, for a few seconds. You
+  carry three.
+- **Gusts** are the weather's gift: every few seconds the wind sweeps the face
+  clear. They cost nothing, but they come on their own schedule.
 - **Cairns.** Every twelfth ledge carries a cairn. Light it to set a
   checkpoint, clear a lasting patch of fog around it, and shove the whiteout
   back down the mountain.
+- **Crystals**, often on the riskier fork, pay points and grant Clear Sight:
+  for six hops the lantern lights at once and reaches two rows.
 
-- **Momentum.** Every landing sends a ripple through the fog that shows the
-  next ledge for half a second. Chain hops and it shows two, then three. Stop,
-  and it closes. Keep moving and the path keeps opening in front of you.
-- **Crystals** on some ledges, often on the riskier of two, pay points and
-  grant Clear Sight: one extra ripple row for the next six hops.
+**What you have seen, you remember.** Any ledge that has been legible stays as
+a fading dashed outline for a few seconds after the fog takes it back, so a
+gust is worth memorising and a route can be run from memory.
 
-Hop into empty fog and you slip, losing two rows and your combo.
+Hop into empty fog and you slip, losing two rows and your combo. A hop crosses
+one lane, or two if you leap: further, slower, and a longer way to fall.
 
 **Scoring.** Every ledge pays, combos multiply it, and a hop onto a ledge you
-could not see pays a blind bonus. Crystals, cairns and the summit add more, and
-a fast summit earns a time bonus. Best score is saved alongside best time. Higher up the
-gusts come rarer and show less, some ledges crumble under you moments after you
-land, and the whiteout climbs faster.
+could neither see nor remember pays a blind bonus. Crystals, cairns and the
+summit add more, and a fast summit earns a time bonus. Guide mode lights the
+route for you and is scored at half. Higher up the gusts come rarer and show
+less, some ledges crumble under you moments after you land, and the whiteout
+climbs faster.
 
 ## Controls
 
@@ -54,13 +62,16 @@ land, and the whiteout climbs faster.
 | Left / A | Hop up-left |
 | Up / W / Space | Hop straight up |
 | Right / D | Hop up-right |
+| Q / E, or Shift and a direction | Leap two lanes |
+| Z / X / C | Throw the axe up-left / up / up-right |
+| F | Light a flare |
 | Enter | Confirm |
 | Esc or P | Pause |
 | M | Mute |
 | R | Restart (while paused) |
-| Q | Back to the title (while paused) |
+| T | Back to the title (while paused) |
 
-You can also tap or click: left third, middle third, right third of the screen.
+Tap or click the lane you want to hop to.
 
 ## The three zones
 

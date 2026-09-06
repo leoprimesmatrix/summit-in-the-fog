@@ -9,11 +9,12 @@
   var Part = SITF.Particles;
   var Par = SITF.Parallax;
   var Aud = SITF.Audio;
+  var Tools = SITF.Tools;
   var COL = C.COLORS;
 
   var climber, run, camera, shake, banner, toast, snowAcc, wispAcc, leafAcc, moteAcc,
       dustAcc, breathAcc,
-      endSeq, milestone, echo, flash, cairnCount;
+      endSeq, milestone, echo, flash, cairnCount, guideMode;
 
   var Play = {};
 
@@ -68,12 +69,14 @@
     F.reset();
     Part.clear();
     SITF.Sky.reset();
+    Tools.reset();
+    guideMode = SITF.Settings.guide();
 
     var startLane = Math.floor(C.LANE_X.length / 2);
     climber = {
       row: 0, lane: startLane, state: 'idle', t: 0,
       fromX: laneX(startLane), fromY: rowY(0), toX: laneX(startLane), toY: rowY(0),
-      targetRow: 0, targetLane: startLane, hopDist: 0,
+      targetRow: 0, targetLane: startLane, hopDist: 0, toolT: 0,
       facing: 1, frame: 0, idleTime: 0, blink: 0, landT: 0, trailAcc: 0
     };
     run = {
@@ -82,7 +85,7 @@
       settings: false,
       score: 0, crystals: 0, blind: 0, timeBonus: 0, clarity: 0
     };
-    echo = { t: 99, x: 0, y: 0, rows: 0 };
+    echo = { t: 99, x: 0, y: 0 };
     flash = { t: 0, dur: 1, color: '#ffffff', peak: 0 };
     milestone = C.ALT_BASE_M + C.MILESTONE_M;
     camera = { y: rowY(0) };
@@ -147,16 +150,7 @@
     toast = { text: text, t: dur, dur: dur };
   }
 
-  // How many rows the landing ripple opens: momentum sees further.
-  function echoRows() {
-    var n = C.ECHO_ROWS_BASE;
-    if (run.combo >= C.ECHO_COMBO_2) n++;
-    if (run.combo >= C.ECHO_COMBO_3) n++;
-    if (run.clarity > 0) n++;
-    return n;
-  }
-
-  // 0..1 strength of the current echo reveal.
+  // 0..1 strength of the fog displaced around the climber's feet.
   function echoAlpha() {
     if (echo.t < C.ECHO_HOLD) return 1;
     var f = (echo.t - C.ECHO_HOLD) / C.ECHO_FADE;
@@ -200,10 +194,17 @@
     climber.t = 0;
     climber.idleTime = 0;
     climber.landT = 0;
-    F.resetLantern();
 
     var inRange = (targetLane >= 0 && targetLane <= laneMax());
     var fh = inRange ? M.footholdAt(targetRow, targetLane) : null;
+
+    // Was this hop taken on knowledge or on nerve? Read the target before the
+    // lantern is put out, or standing still would count as a blind hop.
+    if (fh) {
+      var known = fh.fogAlpha >= 0.15 || fh.memory > 0;
+      climber.blindHop = targetRow > 1 && !known;
+    }
+    F.resetLantern();
 
     // Push-off dust behind the feet.
     var sy = toScreenY(pos.y);
@@ -215,8 +216,6 @@
     }
 
     if (fh) {
-      // A blind hop: the target ledge was hidden when the player committed.
-      climber.blindHop = targetRow > 1 && revealAlpha(targetRow, laneX(fh.lane)) < 0.15;
       climber.targetLane = (fh.type === 'start') ? targetLane : fh.lane;
       climber.toX = laneX(climber.targetLane);
       climber.toY = rowY(targetRow);
@@ -289,16 +288,14 @@
     });
     landingPuff(p.x, sy, 0.7 + Math.min(0.6, run.combo * 0.06));
 
-    // The landing ripples the fog: the next ledge (or more, with momentum)
-    // shows for a moment. This is what keeps a chain alive. A visible ring
-    // spreads from the feet so the mechanic can be read, not just inferred.
+    // The landing displaces the fog around your feet. It is weight and
+    // presence, not information: it never shows what is on the row above.
     var lp = climberPos();
-    echo = { t: 0, x: lp.x, y: lp.y, rows: echoRows() };
+    echo = { t: 0, x: lp.x, y: lp.y };
     if (run.clarity > 0) run.clarity--;
-    if (echo.rows >= 2) Aud.play('sfx_echo', { volume: 0.5 + 0.15 * echo.rows });
     Part.spawn('ring', p.x, sy - 1, {
-      life: 0.45 + 0.08 * echo.rows, r: 22 + 10 * echo.rows, w: 1, grow: 0.42,
-      color: echo.rows >= 3 ? COL.warn : COL.accent, alpha: 0.55 + 0.1 * echo.rows, layer: 'screen'
+      life: 0.42, r: 24, w: 1, grow: 0.42,
+      color: COL.accent, alpha: 0.45, layer: 'screen'
     });
 
     // Score: every ledge pays, combos multiply, hidden ledges pay extra.
@@ -518,9 +515,11 @@
     updateClimber(dt);
 
     var zone = currentZone();
+    Tools.update(dt, toScreenY);
     F.updateGust(dt, zone, onGust);
     F.updateWhiteout(dt, climberRowFloat(), zone);
-    F.updateLantern(dt, climber.state === 'idle' ? climber.idleTime : 0);
+    // Clear Sight: the lantern comes up at once and reaches a row further.
+    F.updateLantern(dt, climber.state === 'idle' ? climber.idleTime : 0, run.clarity > 0);
     F.tick(dt);
     updateFogAlphas(dt);
 
@@ -554,12 +553,34 @@
 
   function updateClimber(dt) {
     switch (climber.state) {
-      case 'idle':
+      case 'idle': {
         climber.idleTime += dt;
         climber.frame = Math.floor(SITF.time * 2) % 2;
+
+        // A tool in the air is a commitment: you cannot hop until it lands.
+        var tool = SITF.Input.takeTool();
+        if (tool && !Tools.busy()) {
+          var tp = climberPos();
+          if (tool.kind === 'axe') {
+            if (Tools.throwAxe(tool.dir, climber.row, climber.lane, tp.x, toScreenY(tp.y))) {
+              climber.toolT = C.AXE_TIME;
+              if (tool.dir !== 0) climber.facing = tool.dir > 0 ? 1 : -1;
+            }
+          } else if (tool.kind === 'flare') {
+            if (Tools.useFlare(climber.row, tp.x, tp.y)) {
+              climber.toolT = C.FLARE_RISE;
+              addFlash(COL.lantern, 0.10, 0.25);
+            } else {
+              setToast('NO FLARES LEFT', 1.0);
+            }
+          }
+        }
+        if (climber.toolT > 0) { climber.toolT -= dt; SITF.Input.clearHop(); break; }
+
         var dir = SITF.Input.takeHop();
         if (dir !== null) attemptHop(dir);
         break;
+      }
 
       case 'hop': {
         var hopTime = (climber.hopDist >= 2)
@@ -832,7 +853,8 @@
       color: Par.fogColorAt(rf),
       lanternTargets: lanternTargets,
       clearingPoints: clearingPoints,
-      echo: { x: echo.x, y: toScreenY(echo.y) - 8, r: 26 + Math.min(1, echo.t / 0.5) * 70, alpha: echoAlpha() }
+      echo: { x: echo.x, y: toScreenY(echo.y) - 8, r: 18 + Math.min(1, echo.t / 0.5) * 14, alpha: echoAlpha() * 0.7 },
+      flare: Tools.flareLight(toScreenY)
     });
 
     // The wind's leading edge catches the light as it sweeps across.
@@ -877,6 +899,7 @@
 
     // The climber always stays legible, never lost inside the fog.
     drawClimberLayer(ctx, p);
+    drawTools(ctx);
 
     ctx.restore();
 
@@ -934,7 +957,7 @@
 
   // How strongly a row above the fog line is currently revealed.
   // The sources are the wind gust, the echo step, the lantern and lit cairns.
-  function revealAlpha(r, x) {
+  function revealAlpha(r, x, lane) {
     var a = 0;
 
     // Gust: a band of rows swept clear from the left.
@@ -949,14 +972,21 @@
       }
     }
 
-    // Echo step: the rows just above the last landing, briefly.
-    var ea = echoAlpha();
-    if (ea > 0 && r > climber.row && r <= climber.row + echo.rows) a = Math.max(a, ea);
-
-    // Lantern: the single next row, while standing still.
-    if (F.lanternAlpha > 0 && climber.state === 'idle' && r === climber.row + 1) {
-      a = Math.max(a, F.lanternAlpha);
+    // Lantern: the row above, all lanes, while you stand still. Clear Sight
+    // from a crystal lights it at once and carries it a row further.
+    if (F.lanternAlpha > 0 && climber.state === 'idle') {
+      var lanternRows = run.clarity > 0 ? 2 : 1;
+      if (r > climber.row && r <= climber.row + lanternRows) {
+        a = Math.max(a, F.lanternAlpha * (r === climber.row + 2 ? 0.8 : 1));
+      }
     }
+
+    // The axe reads up one lane; the flare reads everything for a moment.
+    if (lane != null) a = Math.max(a, Tools.reveal(r, lane));
+
+    // Guide mode: the route lights itself, for players who want the climb
+    // without the route-finding. Scored at half, and sets no records.
+    if (guideMode && r > climber.row && r <= climber.row + 2) a = Math.max(a, 1);
 
     // Lit cairns keep their surroundings visible for the rest of the run.
     for (var i = 0; i < F.clearings.length; i++) {
@@ -995,12 +1025,20 @@
       var covered = rowY(r) < fogLineWorldY;
       for (var i = 0; i < row.footholds.length; i++) {
         var f = row.footholds[i];
-        var x = (f.type === 'start') ? C.LANE_X[1] : laneX(f.lane);
-        var target = covered ? revealAlpha(r, x) : 1;
+        var lane = (f.type === 'start') ? climber.lane : f.lane;
+        var x = laneX(lane);
+        var target = covered ? revealAlpha(r, x, lane) : 1;
         var tau = (target > f.fogAlpha) ? C.FOG_REVEAL_RISE_TAU : C.FOG_REVEAL_FALL_TAU;
         var k = 1 - Math.exp(-dt / tau);
         f.fogAlpha += (target - f.fogAlpha) * k;
         if (Math.abs(target - f.fogAlpha) < 0.003) f.fogAlpha = target;
+
+        // Anything legible is committed to memory, and stays as a fading
+        // outline once the fog takes it back. Remembering the gust is the
+        // skill the whole reveal economy is built on, so the game holds the
+        // shape of what you saw rather than asking you to hold it alone.
+        if (f.fogAlpha >= 0.55) f.memory = C.MEMORY_HOLD;
+        else if (f.memory > 0) f.memory = Math.max(0, f.memory - dt);
       }
     }
   }
@@ -1020,6 +1058,33 @@
     }
   }
 
+  // A ledge from memory: the silhouette only, dashed, thinning as it goes.
+  // Drawn shadowed then lit, so it reads against bright fog by day and dark
+  // fog at night without needing two colours.
+  function drawMemory(ctx, x, y, k) {
+    if (k <= 0.02) return;
+    var w = S.LEDGE_W, h = S.LEDGE_H;
+    var left = Math.round(x - w / 2), top = Math.round(y);
+    var a = U.clamp(k, 0, 1) * C.MEMORY_ALPHA;
+
+    ctx.save();
+    for (var pass = 0; pass < 2; pass++) {
+      var off = pass === 0 ? 1 : 0;
+      ctx.globalAlpha = pass === 0 ? a * 0.7 : a;
+      ctx.fillStyle = pass === 0 ? COL.ink : COL.text;
+      for (var i = 0; i < w; i += 4) {
+        var seg = Math.min(2, w - i);
+        ctx.fillRect(left + i + off, top + off, seg, 1);
+        ctx.fillRect(left + i + off, top + h - 1 + off, seg, 1);
+      }
+      for (var j = 1; j < h - 1; j += 4) {
+        ctx.fillRect(left + off, top + j + off, 1, Math.min(2, h - 1 - j));
+        ctx.fillRect(left + w - 1 + off, top + j + off, 1, Math.min(2, h - 1 - j));
+      }
+    }
+    ctx.restore();
+  }
+
   function drawRow(ctx, row, r, y) {
     var night = nightAmount();
     var dusk = duskAmount();
@@ -1027,8 +1092,14 @@
     for (var i = 0; i < row.footholds.length; i++) {
       var f = row.footholds[i];
       var alpha = f.fogAlpha;
+      var x = (f.type === 'start') ? laneX(climber.lane) : laneX(f.lane);
+
+      // What you saw a moment ago, held as an outline while it fades. This is
+      // the difference between remembering a gust and being asked to.
+      if (alpha < 0.55 && f.memory > 0 && f.state !== 'gone') {
+        drawMemory(ctx, x, y, (f.memory / C.MEMORY_HOLD) * (1 - alpha / 0.55));
+      }
       if (alpha <= 0.02) continue;
-      var x = (f.type === 'start') ? C.LANE_X[1] : laneX(f.lane);
 
       ctx.save();
       ctx.globalAlpha = alpha;
@@ -1158,33 +1229,104 @@
       ctx.restore();
     }
 
-    // Beside the climber, not above: the row above is where the next ledge is.
-    if (run.combo >= 2 && climber.state !== 'summit') {
-      var right = climber.lane < laneMax();
-      var tagX = right ? p.x + 16 : p.x - 16;
-      var hot = run.combo >= 8;
-      Font.draw(ctx, 'X' + run.combo, tagX, psy - S.CLIMBER_H + 2, {
-        scale: 1, align: right ? 'left' : 'right',
-        color: hot ? COL.warn : COL.accent,
-        shadow: COL.ink
-      });
-      // Combo window bar: how long before the chain drops.
-      if (climber.state === 'idle') {
-        var left = U.clamp(1 - (run.time - run.lastLandTime) / C.COMBO_WINDOW, 0, 1);
-        var bw = 14;
-        var bx = right ? tagX : tagX - bw;
+    // Nothing is written on or beside the climber: the chain lives in the
+    // HUD panel, and this space belongs to the mountain.
+
+    Part.draw(ctx, 'world');
+  }
+
+  // The axe on its way up, the mark it leaves, and a burning flare.
+  function drawTools(ctx) {
+    var axe = Tools.axeState();
+    if (axe) {
+      var lx = laneX(axe.lane);
+      if (axe.phase === 'fly') {
+        var k = U.clamp(axe.t / C.AXE_TIME, 0, 1);
+        var ax = U.lerp(axe.fromX, lx, k);
+        var ay = U.lerp(axe.fromY - 8, toScreenY(rowY(axe.row + 1)) - 6, U.easeOutQuad(k));
         ctx.save();
-        ctx.globalAlpha = 0.5;
-        ctx.fillStyle = COL.ink;
-        ctx.fillRect(Math.round(bx), Math.round(psy - S.CLIMBER_H + 11), bw, 2);
-        ctx.globalAlpha = 1;
-        ctx.fillStyle = hot ? COL.warn : COL.accent;
-        ctx.fillRect(Math.round(bx), Math.round(psy - S.CLIMBER_H + 11), Math.round(bw * left), 2);
+        ctx.translate(Math.round(ax), Math.round(ay));
+        ctx.rotate(axe.t * 34);
+        ctx.fillStyle = '#6b5a44';
+        ctx.fillRect(-1, -4, 2, 8);
+        ctx.fillStyle = '#c8d2da';
+        ctx.fillRect(-3, -4, 5, 2);
         ctx.restore();
+        // A thin arc showing where it is going, so the throw reads as aimed.
+        ctx.save();
+        ctx.globalAlpha = 0.20;
+        ctx.fillStyle = COL.text;
+        ctx.fillRect(Math.round(lx), Math.round(toScreenY(rowY(axe.row + 1))) - 2, 1, 4);
+        ctx.restore();
+      } else {
+        // Stuck: it lights its lane, and the head glints.
+        var k2 = axe.t < C.AXE_HOLD ? 1 : U.clamp(1 - (axe.t - C.AXE_HOLD) / C.AXE_FADE, 0, 1);
+        var top = (axe.hit >= 0) ? axe.hit : axe.row + C.AXE_ROWS;
+        var y0 = toScreenY(rowY(axe.row + 1)) + 6;
+        var y1 = toScreenY(rowY(top));
+        ctx.save();
+        ctx.globalCompositeOperation = 'lighter';
+        var g = ctx.createLinearGradient(0, y0, 0, y1);
+        g.addColorStop(0, U.rgba(COL.lantern, 0.16 * k2));
+        g.addColorStop(1, U.rgba(COL.lantern, 0.02 * k2));
+        ctx.fillStyle = g;
+        ctx.fillRect(Math.round(lx) - 12, Math.min(y0, y1), 24, Math.abs(y1 - y0));
+        ctx.restore();
+        if (axe.hit >= 0) {
+          var hy = toScreenY(rowY(axe.hit));
+          S.drawGlow(ctx, S.img.glow_accent, lx, hy - 2, 0.35 * k2, 0.8);
+          ctx.save();
+          ctx.globalAlpha = k2;
+          ctx.fillStyle = '#c8d2da';
+          ctx.fillRect(Math.round(lx) - 2, Math.round(hy) - 3, 4, 2);
+          ctx.fillStyle = '#6b5a44';
+          ctx.fillRect(Math.round(lx) - 1, Math.round(hy) - 1, 2, 5);
+          ctx.restore();
+        }
       }
     }
 
-    Part.draw(ctx, 'world');
+    var fl = Tools.flareLight(toScreenY);
+    if (fl && fl.alpha > 0.01) {
+      S.drawGlow(ctx, S.img.glow_lantern, fl.x, fl.y, fl.alpha * 0.9, 2.2);
+      ctx.save();
+      ctx.globalAlpha = fl.alpha;
+      ctx.fillStyle = '#fff3d0';
+      ctx.fillRect(Math.round(fl.x) - 1, Math.round(fl.y) - 1, 2, 2);
+      ctx.restore();
+    }
+  }
+
+  // What you are carrying, bottom-left, out of the route's way.
+  function drawToolsHUD(ctx) {
+    var y = C.H - 20;
+    U.softPanel(ctx, 5, y - 4, 92, 18, 0.45);
+
+    // Axe: lit when it is in your hand, dim while it is out there.
+    var ready = Tools.axeReady();
+    ctx.save();
+    ctx.globalAlpha = ready ? 1 : 0.35;
+    ctx.fillStyle = '#6b5a44';
+    ctx.fillRect(12, y + 1, 2, 8);
+    ctx.fillStyle = ready ? '#c8d2da' : '#7d8790';
+    ctx.fillRect(10, y, 6, 2);
+    ctx.restore();
+    Font.draw(ctx, 'ZXC', 20, y + 1,
+              { scale: 1, color: ready ? COL.text : COL.textDim, shadow: COL.ink });
+
+    // Flares: one pip each, spent ones hollow.
+    var fx = 52;
+    for (var i = 0; i < C.FLARE_COUNT; i++) {
+      var have = i < Tools.flares;
+      ctx.save();
+      ctx.globalAlpha = have ? 1 : 0.3;
+      ctx.fillStyle = have ? COL.warn : COL.textDim;
+      ctx.fillRect(fx + i * 6, y + 1, 3, 7);
+      if (have) { ctx.fillStyle = '#fff3d0'; ctx.fillRect(fx + i * 6, y + 1, 3, 2); }
+      ctx.restore();
+    }
+    Font.draw(ctx, 'F', 74, y + 1,
+              { scale: 1, color: Tools.flares > 0 ? COL.text : COL.textDim, shadow: COL.ink });
   }
 
   function drawHUD(ctx, rf) {
@@ -1196,13 +1338,30 @@
     ctx.drawImage(S.img.peak_icon, 9, 9);
     Font.draw(ctx, altText, 21, 9, { scale: 1, color: COL.text, shadow: COL.ink });
 
-    // Timer and score, top-right (clear of the altitude bar).
+    // Timer, score and the chain, top-right (clear of the altitude bar).
     var timeText = U.formatTime(run.time);
     var scoreText = String(run.score);
-    var rw = Math.max(Font.width(timeText, 1), Font.width(scoreText, 1)) + 12;
-    U.softPanel(ctx, C.W - 22 - rw, 5, rw, 26, 0.45);
+    var comboText = run.combo >= 2 ? 'X' + run.combo : '';
+    var rw = Math.max(Font.width(timeText, 1), Font.width(scoreText, 1),
+                      Font.width(comboText, 1)) + 12;
+    var rh = comboText ? 37 : 26;
+    U.softPanel(ctx, C.W - 22 - rw, 5, rw, rh, 0.45);
     Font.draw(ctx, timeText, C.W - 28, 9, { scale: 1, color: COL.text, shadow: COL.ink, align: 'right' });
     Font.draw(ctx, scoreText, C.W - 28, 20, { scale: 1, color: COL.accent, shadow: COL.ink, align: 'right' });
+    if (comboText) {
+      var hot = run.combo >= 8;
+      Font.draw(ctx, comboText, C.W - 28, 31,
+                { scale: 1, color: hot ? COL.warn : COL.textDim, shadow: COL.ink, align: 'right' });
+      // How long the chain has left, as a bar under it.
+      var left = U.clamp(1 - (run.time - run.lastLandTime) / C.COMBO_WINDOW, 0, 1);
+      ctx.save();
+      ctx.globalAlpha = 0.75;
+      ctx.fillStyle = hot ? COL.warn : COL.accent;
+      ctx.fillRect(C.W - 28 - Math.round(24 * left), 39, Math.round(24 * left), 1);
+      ctx.restore();
+    }
+
+    drawToolsHUD(ctx);
 
     // Clear sight buff from a crystal.
     if (run.clarity > 0) {
