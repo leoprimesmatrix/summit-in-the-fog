@@ -42,6 +42,18 @@
     return m + ':' + (whole < 10 ? '0' : '') + whole + '.' + tenth;
   };
 
+  // Slightly rounded near-black slab used behind text: 3px pixel corners, no
+  // outline. Keeps copy legible over busy artwork without boxing it in.
+  U.softPanel = function (ctx, x, y, w, h, alpha) {
+    ctx.save();
+    ctx.globalAlpha = (alpha == null ? 0.5 : alpha);
+    ctx.fillStyle = '#030a14';
+    ctx.fillRect(x + 3, y, w - 6, h);
+    ctx.fillRect(x + 1, y + 1, w - 2, h - 2);
+    ctx.fillRect(x, y + 3, w, h - 6);
+    ctx.restore();
+  };
+
   // Pixel-friendly panel: rectangle with 1px corner notches instead of arcs.
   U.panel = function (ctx, x, y, w, h, color, alpha) {
     ctx.save();

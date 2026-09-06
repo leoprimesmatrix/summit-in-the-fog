@@ -14,6 +14,7 @@ SITF.Config = {
   CAMERA_LERP: 0.12,
 
   HOP_TIME: 0.18, HOP_ARC: 11,
+  LAND_SQUASH: 0.08,        // seconds the landing squash frame shows
   SLIP_LUNGE_TIME: 0.20, FALL_TIME: 0.45, RECOVER_TIME: 0.60,
   INPUT_BUFFER: 0.25,
   COMBO_WINDOW: 0.60,
