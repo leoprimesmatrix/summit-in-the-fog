@@ -240,16 +240,19 @@ function ui() {
   return normalize(declick(out, 2), 0.3);
 }
 
-// Gust: a breath of wind passing left to right.
+// Gust: a soft breath of wind passing left to right. Filtered narrow and
+// low so it reads as a hush rather than a hiss, with a slow swell in and
+// out; this plays every few seconds during a run, so it has to stay gentle
+// on repeat rather than land as a loud, sharp gust each time.
 function gust() {
-  var out = buf(1.1);
-  var n = highpass(lowpass(noise(1.1), 1600), 250);
+  var out = buf(1.3);
+  var n = highpass(lowpass(noise(1.3), 900), 180);
   for (var i = 0; i < n.length; i++) {
     var t = i / RATE;
-    n[i] *= env(t, 0.25, 0.25, 0.55);
+    n[i] *= env(t, 0.45, 0.15, 0.65);
   }
   mixInto(out, n, 0, 1);
-  return normalize(declick(out, 8), 0.45);
+  return normalize(declick(out, 10), 0.26);
 }
 
 // Echo step: the ripple that opens the fog on landing. Airy and short.

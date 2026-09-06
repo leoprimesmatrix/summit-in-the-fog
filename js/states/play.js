@@ -600,7 +600,7 @@
   }
 
   function onGust(zone) {
-    Aud.play('sfx_gust', { volume: 0.85 });
+    Aud.play('sfx_gust', { volume: 0.5 });
     Part.gustBoost = C.GUST_DURATION;
     var topY = toScreenY(rowY(climberRowFloat() + F.gustReveal));
     var botY = toScreenY(climberPos().y);
