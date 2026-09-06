@@ -9,7 +9,7 @@
   };
 
   function makeFoothold(lane, type) {
-    return { lane: lane, type: type, state: 'ok', timer: 0, debris: 0, crystal: false };
+    return { lane: lane, type: type, state: 'ok', timer: 0, debris: 0, crystal: false, fogAlpha: 0 };
   }
 
   // Lanes reachable from every lane in `prev` with a single one-lane step.

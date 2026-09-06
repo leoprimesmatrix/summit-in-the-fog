@@ -12,7 +12,7 @@
   var COL = C.COLORS;
 
   var climber, run, camera, shake, banner, toast, snowAcc, wispAcc, leafAcc, moteAcc,
-      endSeq, floats, milestone, echo, flash, cairnCount;
+      endSeq, milestone, echo, flash, cairnCount;
 
   var Play = {};
 
@@ -80,7 +80,6 @@
     };
     echo = { t: 99, x: 0, y: 0, rows: 0 };
     flash = { t: 0, dur: 1, color: '#ffffff', peak: 0 };
-    floats = [];
     milestone = C.ALT_BASE_M + C.MILESTONE_M;
     camera = { y: rowY(0) };
     shake = { t: 0, mag: 0 };
@@ -135,16 +134,6 @@
   };
 
   // --- feedback ----------------------------------------------------------
-
-  function addFloat(text, x, worldY, color) {
-    floats.push({ text: text, x: x, y: worldY, t: 0, color: color || COL.text });
-  }
-
-  function addScore(n, label, color) {
-    run.score += n;
-    var p = climberPos();
-    addFloat((label ? label + ' ' : '') + '+' + n, p.x, p.y - 22, color);
-  }
 
   function addFlash(color, peak, dur) {
     flash = { t: dur, dur: dur, color: color, peak: peak };
@@ -308,7 +297,7 @@
     run.score += C.SCORE_HOP * Math.min(5, Math.max(1, run.combo));
     if (climber.blindHop) {
       run.blind++;
-      addScore(C.SCORE_BLIND, 'BLIND', COL.accent);
+      run.score += C.SCORE_BLIND;
     }
     climber.blindHop = false;
 
@@ -326,7 +315,7 @@
         fh.crystal = false;
         run.crystals++;
         run.clarity = C.CLARITY_HOPS;
-        addScore(C.SCORE_CRYSTAL, 'CLEAR SIGHT', COL.accent);
+        run.score += C.SCORE_CRYSTAL;
         Aud.play('sfx_crystal', { volume: 0.8 });
         addFlash(COL.accent, 0.10, 0.25);
         var cp = climberPos(), csy = toScreenY(cp.y);
@@ -454,6 +443,7 @@
       endSeq.t += dt;
       Part.update(dt);
       F.tick(dt);
+      updateFogAlphas(dt);
       if (shake.t > 0) shake.t -= dt;
       if (endSeq.kind === 'summit') {
         F.updateGust(dt, currentZone(), null);
@@ -524,6 +514,7 @@
     F.updateWhiteout(dt, climberRowFloat(), zone);
     F.updateLantern(dt, climber.state === 'idle' ? climber.idleTime : 0);
     F.tick(dt);
+    updateFogAlphas(dt);
 
     if (F.frontRow >= climberRowFloat() + 0.15) {
       endWhiteout();
@@ -544,11 +535,6 @@
     if (toast.t > 0) toast.t -= dt;
     if (climber.landT > 0) climber.landT -= dt;
     echo.t += dt;
-    for (var fi = floats.length - 1; fi >= 0; fi--) {
-      floats[fi].t += dt;
-      floats[fi].y -= 22 * dt;
-      if (floats[fi].t > 1.1) floats.splice(fi, 1);
-    }
 
     var rowsData = M.rows;
     for (var r = 0; r < rowsData.length; r++) {
@@ -764,8 +750,6 @@
     ctx.translate(Math.round(sx), Math.round(sy));
 
     Par.draw(ctx, rf, climbPx, SITF.time);
-    // Only the part of the mountain the fog does not cover.
-    drawRows(ctx, botRow, topRow, fogLineY, false);
 
     ctx.restore();
 
@@ -838,8 +822,10 @@
       S.drawGlow(ctx, S.img.pool_lantern, p.x + 2 * climber.facing, toScreenY(p.y) + 1, glowA * 0.9, 1);
     }
 
-    // Ledges the wind, the lantern or a cairn has found emerge from the fog.
-    drawRows(ctx, botRow, topRow, fogLineY, true);
+    // Every visible ledge is drawn here, on top of the fog, at its own eased
+    // alpha: ones the climber has passed sit at full strength, ones still
+    // ahead fade in only as far as they're revealed.
+    drawRows(ctx, botRow, topRow);
 
     // The climber always stays legible, never lost inside the fog.
     drawClimberLayer(ctx, p);
@@ -848,13 +834,6 @@
 
     Part.draw(ctx, 'screen');
     F.drawWhiteout(ctx, toScreenY(rowY(F.frontRow)) + 6);
-
-    // Floating score text.
-    for (var fl2 = 0; fl2 < floats.length; fl2++) {
-      var ft = floats[fl2];
-      var fa = ft.t < 0.8 ? 1 : 1 - (ft.t - 0.8) / 0.3;
-      Font.draw(ctx, ft.text, ft.x, toScreenY(ft.y), { scale: 1, align: 'center', color: ft.color, shadow: COL.ink, alpha: fa });
-    }
 
     // Danger: the whiteout is close. The bottom of the screen pulses cold white.
     var gapRows = rf - F.frontRow;
@@ -947,36 +926,64 @@
     return U.clamp(a, 0, 1);
   }
 
-  // Rows the fog does not cover are drawn with the world; rows above the fog
-  // line are drawn again on top of the fog, only as far as they are revealed.
-  function drawRows(ctx, fromRow, toRow, fogLineY, above) {
+  // Each foothold's displayed fog alpha eases toward its instantaneous target
+  // (1 once the climber has passed it, revealAlpha() while still ahead of the
+  // fog line) instead of snapping, so nothing pops into or out of view. Rise
+  // and fall use different time constants: quick to catch a reveal, slower to
+  // settle back into the murk, so it reads as weather rather than a toggle.
+  function updateFogAlphas(dt) {
+    var rf = climberRowFloat();
+    var p = climberPos();
+    var topRow = Math.min(C.ROWS, Math.floor(rf + (C.H / C.ROW_H) + 2));
+    var botRow = Math.max(0, Math.floor(rf - (C.H / C.ROW_H) - 2));
+    // World-space equivalent of the screen-space "above the fog line" test:
+    // toScreenY adds the same camera/screen offset to both sides, so it
+    // cancels out of the comparison.
+    var fogLineWorldY = p.y - C.ROW_H * 0.5 - 2;
+
+    for (var r = botRow; r <= topRow; r++) {
+      var row = M.row(r);
+      if (!row) continue;
+      var covered = rowY(r) < fogLineWorldY;
+      for (var i = 0; i < row.footholds.length; i++) {
+        var f = row.footholds[i];
+        var x = (f.type === 'start') ? C.LANE_X[1] : laneX(f.lane);
+        var target = covered ? revealAlpha(r, x) : 1;
+        var tau = (target > f.fogAlpha) ? C.FOG_REVEAL_RISE_TAU : C.FOG_REVEAL_FALL_TAU;
+        var k = 1 - Math.exp(-dt / tau);
+        f.fogAlpha += (target - f.fogAlpha) * k;
+        if (Math.abs(target - f.fogAlpha) < 0.003) f.fogAlpha = target;
+      }
+    }
+  }
+
+  // Every visible row is drawn once, on top of the fog raster (the fog canvas
+  // is fully transparent below the fog line anyway, so this is safe for rows
+  // already passed). Each foothold uses its own smoothed fogAlpha rather than
+  // one alpha per row, so a gust or reveal never mis-represents a second
+  // foothold on a mercy row, and nothing pops at the fog-line boundary.
+  function drawRows(ctx, fromRow, toRow) {
     for (var r = fromRow; r <= toRow; r++) {
       var row = M.row(r);
       if (!row) continue;
       var y = toScreenY(rowY(r));
       if (y < -40 || y > C.H + 40) continue;
-      var isAbove = y < fogLineY - 2;
-      if (isAbove !== above) continue;
-      drawRow(ctx, row, r, y, above);
+      drawRow(ctx, row, r, y);
     }
   }
 
-  function drawRow(ctx, row, r, y, above) {
-    var alpha = 1;
-    if (above) {
-      var probe = laneX(row.footholds[0].lane);
-      alpha = revealAlpha(r, probe);
-      if (alpha <= 0.02) return;
-    }
+  function drawRow(ctx, row, r, y) {
     var night = nightAmount();
     var dusk = duskAmount();
 
-    ctx.save();
-    ctx.globalAlpha = alpha;
-
     for (var i = 0; i < row.footholds.length; i++) {
       var f = row.footholds[i];
+      var alpha = f.fogAlpha;
+      if (alpha <= 0.02) continue;
       var x = (f.type === 'start') ? C.LANE_X[1] : laneX(f.lane);
+
+      ctx.save();
+      ctx.globalAlpha = alpha;
 
       if (f.state === 'gone') {
         if (f.debris > 0) {
@@ -990,6 +997,7 @@
           }
           ctx.restore();
         }
+        ctx.restore();
         continue;
       }
 
@@ -1008,35 +1016,43 @@
         var pulseC = 0.30 + 0.12 * Math.sin(SITF.time * 5 + r);
         S.drawGlow(ctx, S.img.glow_accent, x, y - 6 + bobC, pulseC * alpha, 0.9);
         ctx.drawImage(S.img.crystal, Math.round(x - 2), Math.round(y - 10 + bobC));
-        // Now and then a glint lifts off the crystal.
-        if (!above || alpha > 0.5) {
-          if (Math.random() < 0.02) {
-            Part.spawn('sparkle', x - 2 + Math.random() * 5, y - 8 + bobC, {
-              vx: (Math.random() - 0.5) * 8, vy: -10 - Math.random() * 10,
-              life: 0.6, w: 1, h: 1, color: '#ffffff', alpha: 0.9, layer: 'screen'
-            });
-          }
+        // Now and then a glint lifts off the crystal, once it's clearly visible.
+        if (alpha > 0.5 && Math.random() < 0.02) {
+          Part.spawn('sparkle', x - 2 + Math.random() * 5, y - 8 + bobC, {
+            vx: (Math.random() - 0.5) * 8, vy: -10 - Math.random() * 10,
+            life: 0.6, w: 1, h: 1, color: '#ffffff', alpha: 0.9, layer: 'screen'
+          });
         }
       }
+
+      ctx.restore();
     }
 
-    if (row.cairn) {
-      var cx = laneX(row.footholds[0].lane) + 13;
-      var pop = row.cairn.pop > 0 ? 1 + U.easeOutBack(1 - row.cairn.pop / 0.35) * 0.14 : 1;
-      if (row.cairn.lit) {
-        var cf = 0.9 + 0.1 * Math.sin(SITF.time * 17) * Math.sin(SITF.time * 5.1);
-        S.drawGlow(ctx, S.img.glow_cairn, cx, y - 10, (0.5 + 0.1 * Math.sin(SITF.time * 3)) * cf * (1 + 0.4 * night), 1.1);
-        S.drawGlow(ctx, S.img.pool_cairn, cx, y + 1, 0.55 * cf, 1);
+    if (row.cairn || row.summit) {
+      var alpha0 = row.footholds[0].fogAlpha;
+      if (alpha0 > 0.02) {
+        ctx.save();
+        ctx.globalAlpha = alpha0;
+
+        if (row.cairn) {
+          var cx = laneX(row.footholds[0].lane) + 13;
+          var pop = row.cairn.pop > 0 ? 1 + U.easeOutBack(1 - row.cairn.pop / 0.35) * 0.14 : 1;
+          if (row.cairn.lit) {
+            var cf = 0.9 + 0.1 * Math.sin(SITF.time * 17) * Math.sin(SITF.time * 5.1);
+            S.drawGlow(ctx, S.img.glow_cairn, cx, y - 10, (0.5 + 0.1 * Math.sin(SITF.time * 3)) * cf * (1 + 0.4 * night), 1.1);
+            S.drawGlow(ctx, S.img.pool_cairn, cx, y + 1, 0.55 * cf, 1);
+          }
+          S.drawCairn(ctx, cx, y, row.cairn.lit, pop, Math.floor(SITF.time * 6) % 2);
+        }
+
+        if (row.summit) {
+          // Offset so the climber does not stand in front of the flag.
+          S.drawSummit(ctx, laneX(row.footholds[0].lane) + 14, y, Math.floor(SITF.time * 3) % 2);
+        }
+
+        ctx.restore();
       }
-      S.drawCairn(ctx, cx, y, row.cairn.lit, pop, Math.floor(SITF.time * 6) % 2);
     }
-
-    if (row.summit) {
-      // Offset so the climber does not stand in front of the flag.
-      S.drawSummit(ctx, laneX(row.footholds[0].lane) + 14, y, Math.floor(SITF.time * 3) % 2);
-    }
-
-    ctx.restore();
   }
 
   // Cold shimmer where an unlit cairn waits above, so the checkpoint can be

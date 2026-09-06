@@ -57,6 +57,12 @@ SITF.Config = {
   ECHO_ROWS_BASE: 1, ECHO_COMBO_2: 4, ECHO_COMBO_3: 8,
   CLARITY_HOPS: 6,          // crystal pickup: +1 echo row for this many hops
   CRYSTAL_CHANCE: 0.16,
+
+  // Ledges ease into/out of visibility instead of popping; asymmetric so a
+  // reveal reads as fast weather clearing but fog closing back over feels
+  // heavier. Values are exponential time constants (~3*tau to fully settle).
+  FOG_REVEAL_RISE_TAU: 0.05,   // ~0.15s to catch up when something becomes visible
+  FOG_REVEAL_FALL_TAU: 0.15,   // ~0.45s to fade back into fog
   SCORE_HOP: 10, SCORE_BLIND: 40, SCORE_CRYSTAL: 100, SCORE_CAIRN: 150,
   SCORE_SUMMIT: 1000, SCORE_TIME_BONUS_PER_SEC: 6, SCORE_TIME_PAR: 240,
   DANGER_ROWS: 4, MILESTONE_M: 500,

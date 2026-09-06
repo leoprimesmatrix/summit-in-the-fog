@@ -81,7 +81,7 @@
   // Clearings open up over a moment rather than appearing at full size.
   F.clearingRadius = function (cl) {
     var k = U.clamp((cl.age == null ? 1 : cl.age) / 0.7, 0, 1);
-    return C.CAIRN_CLEAR_RADIUS * (0.15 + 0.85 * U.easeOutCubic(k));
+    return C.CAIRN_CLEAR_RADIUS * U.easeOutCubic(k);
   };
 
   F.tick = function (dt) {
@@ -265,7 +265,7 @@
     if (view.clearingPoints) {
       for (var ci = 0; ci < view.clearingPoints.length; ci++) {
         var cp = view.clearingPoints[ci];
-        punchRadial(cp.x / 2, cp.y / 2, (cp.r || C.CAIRN_CLEAR_RADIUS) / 2, 0.34, 0.5);
+        punchRadial(cp.x / 2, cp.y / 2, (cp.r != null ? cp.r : C.CAIRN_CLEAR_RADIUS) / 2, 0.34, 0.5);
       }
     }
 
