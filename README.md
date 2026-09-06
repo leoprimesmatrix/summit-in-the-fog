@@ -82,8 +82,9 @@ by design, only effects and a quiet wind bed; both have sliders in Settings.
 ## Credits
 
 Backgrounds are from CraftPix's free "Nature Landscapes" pixel art pack.
-Everything else, including the climber, ledges, cairns, fog, whiteout and the
-5x7 bitmap font, is drawn procedurally in code. See `CREDITS.md`.
+Text uses the free pixel font m5x7 by Daniel Linssen. Everything else, including
+the climber, ledges, cairns, fog and whiteout, is drawn procedurally in code.
+See `CREDITS.md`.
 
 ## Technical notes
 

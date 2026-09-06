@@ -166,7 +166,6 @@
     SITF.Audio.init();
     SITF.Sprites.build();
     SITF.Fog.build();
-    SITF.Logo.build();
 
     window.addEventListener('blur', function () {
       if (currentName === 'play' && current && current.forcePause) current.forcePause();
@@ -174,9 +173,13 @@
 
     requestAnimationFrame(frame);
 
-    SITF.Assets.load(function () {
-      booted = true;
-      applyState('title', {});
+    // The logo is rendered from the font, so the face must be settled first.
+    SITF.Font.load(function () {
+      SITF.Logo.build();
+      SITF.Assets.load(function () {
+        booted = true;
+        applyState('title', {});
+      });
     });
   }
 

@@ -13,7 +13,14 @@ License: <https://craftpix.net/file-licenses/>
 
 **Everything else is original, drawn in code** for this jam: the climber, the rock
 ledges, the crumbling ledges, the cairns, the summit flag, the lantern glow, the
-fog layers, the whiteout, the particles, the UI, and the 5x7 bitmap font.
+fog layers, the whiteout, the particles and the UI.
+
+## Font
+
+**m5x7** by Daniel Linssen (Managore), free to use.
+https://managore.itch.io/m5x7 - shipped as assets/fonts/m5x7.ttf and rendered
+to hard pixels at boot. A built-in 5x7 bitmap font is the fallback if the file
+is missing.
 
 ## Audio
 

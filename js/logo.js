@@ -28,16 +28,24 @@
 
   // Letters laid out with breathing room so bold strokes never touch.
   function wordMask(text, scale, gap, bold) {
-    var gw = Font.GLYPH_W * scale, gh = Font.GLYPH_H * scale;
-    var adv = gw + gap + bold * 2;
-    var w = text.length * adv - gap, h = gh + bold * 2;
+    // Glyphs may be proportional, so measure each one.
+    var gh = Font.GLYPH_H * scale;
+    var widths = [], w = 0;
+    for (var k = 0; k < text.length; k++) {
+      var gwk = Font.width(text.charAt(k), scale);
+      widths.push(gwk);
+      w += gwk + bold * 2 + (k < text.length - 1 ? gap : 0);
+    }
+    var h = gh + bold * 2;
     var cv = U.makeCanvas(w, h);
     var cx = cv.getContext('2d');
+    var x = 0;
     for (var i = 0; i < text.length; i++) {
-      var g = U.makeCanvas(gw, gh);
+      var g = U.makeCanvas(widths[i], gh);
       Font.draw(g.getContext('2d'), text.charAt(i), 0, 0, { scale: scale, color: '#fff' });
       var d = dilate(g, bold);
-      cx.drawImage(d, i * adv, 0);
+      cx.drawImage(d, x, 0);
+      x += widths[i] + bold * 2 + gap;
     }
     return cv;
   }
