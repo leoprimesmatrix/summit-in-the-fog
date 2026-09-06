@@ -295,7 +295,6 @@
     var subRing = outline(subMask, COL.ink, 1);
 
     var emblem = peakEmblem();
-    L.emblem = emblem;
 
     var pad = 4;
     var w = ring.width + pad * 2;
