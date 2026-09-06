@@ -10,9 +10,10 @@
   var Par = SITF.Parallax;
   var Aud = SITF.Audio;
   var Tools = SITF.Tools;
+  var Storm = SITF.Storm;
   var COL = C.COLORS;
 
-  var climber, run, camera, shake, banner, toast, snowAcc, wispAcc, leafAcc, moteAcc,
+  var climber, run, camera, shake, banner, toast, snowAcc, wispAcc, driftAcc, leafAcc, moteAcc,
       dustAcc, breathAcc,
       endSeq, milestone, echo, flash, cairnCount, guideMode;
 
@@ -70,6 +71,7 @@
     Part.clear();
     SITF.Sky.reset();
     Tools.reset();
+    Storm.reset();
     guideMode = SITF.Settings.guide();
 
     var startLane = Math.floor(C.LANE_X.length / 2);
@@ -83,7 +85,8 @@
       time: 0, slips: 0, combo: 0, bestCombo: 0, lastLandTime: -99,
       checkpointRow: 0, started: false, paused: false, over: false, zone: 0,
       settings: false,
-      score: 0, crystals: 0, blind: 0, timeBonus: 0, clarity: 0
+      score: 0, crystals: 0, blind: 0, timeBonus: 0, clarity: 0,
+      breath: 1, gasping: false, guide: SITF.Settings.guide()
     };
     echo = { t: 99, x: 0, y: 0 };
     flash = { t: 0, dur: 1, color: '#ffffff', peak: 0 };
@@ -92,7 +95,7 @@
     shake = { t: 0, mag: 0 };
     banner = { text: C.ZONES[0].name, t: 2.4, dur: 2.4 };
     toast = { text: '', t: 0, dur: 1 };
-    snowAcc = 0; wispAcc = 0; leafAcc = 0; moteAcc = 0; dustAcc = 0; breathAcc = 0;
+    snowAcc = 0; wispAcc = 0; driftAcc = 0; leafAcc = 0; moteAcc = 0; dustAcc = 0; breathAcc = 0;
     endSeq = { active: false, kind: '', t: 0 };
     cairnCount = 0;
     for (var r = 0; r < M.rows.length; r++) if (M.rows[r].cairn) cairnCount++;
@@ -115,7 +118,9 @@
       rowFloat: climberRowFloat(), time: run.time, slips: run.slips,
       combo: run.combo, bestCombo: run.bestCombo, checkpoint: run.checkpointRow,
       over: run.over, paused: run.paused, zone: run.zone, frontRow: F.frontRow,
-      score: run.score, crystals: run.crystals, blind: run.blind, clarity: run.clarity
+      score: run.score, crystals: run.crystals, blind: run.blind, clarity: run.clarity,
+      breath: run.breath, storm: Storm.phase, wind: Storm.windDir,
+      sheltered: Storm.sheltered, flares: Tools.flares
     };
   };
 
@@ -180,12 +185,75 @@
 
   function laneMax() { return C.LANE_X.length - 1; }
 
+  // A move the mountain will not allow: the climber braces instead, and is
+  // told why. Costs a moment, but never a fall.
+  function refuseHop(why) {
+    setToast(why, 1.1);
+    climber.idleTime = 0;
+    F.resetLantern();
+    var rp = climberPos(), rsy = toScreenY(rp.y);
+    for (var i = 0; i < 4; i++) {
+      Part.spawn('puff', rp.x + (Math.random() - 0.5) * 8, rsy - 4 - Math.random() * 6, {
+        vx: (Math.random() - 0.5) * 24, vy: -6 - Math.random() * 8,
+        life: 0.35, w: 1, h: 1, grow: 2, color: COL.snow, alpha: 0.5, layer: 'screen'
+      });
+    }
+  }
+
+  // Somewhere the storm cannot push past. A lit cairn is the whole reason to
+  // light one, and the reason to be near one when the sky turns.
+  function atShelter() {
+    if (climber.state !== 'idle' && climber.state !== 'recover') return false;
+    var row = M.row(climber.row);
+    return !!(row && row.cairn && row.cairn.lit);
+  }
+
+  function updateBreath(dt, zone) {
+    if (!zone.breath) {
+      // Below the death zone the air is thick enough to ignore.
+      run.breath = Math.min(1, run.breath + dt * 0.5);
+      return;
+    }
+    if (climber.state === 'idle' || climber.state === 'recover') {
+      var rate = atShelter() ? C.BREATH_REST_CAIRN : C.BREATH_REST;
+      // You only recover while you are genuinely standing, not mid-chain.
+      if (climber.idleTime > 0.25) run.breath = Math.min(1, run.breath + rate * dt);
+    }
+    if (run.breath < C.BREATH_LOW && !run.gasping) {
+      run.gasping = true;
+      Aud.play('sfx_breath_low', { volume: 0.5 });
+    } else if (run.breath > C.BREATH_LOW + 0.12) {
+      run.gasping = false;
+    }
+  }
+
   function attemptHop(dir) {
+    // The storm wind changes what a hop costs, never where it lands. Pushing
+    // the climber sideways could strand them on a row whose only ledge sat
+    // upwind, which is unfair rather than hard; instead, crossing into the
+    // wind is slow and heavy, and a two-lane leap into it is refused.
+    //
+    // Refused, not quietly shortened: silently turning a leap into a hop
+    // lands the player on air they never aimed at, which reads as the game
+    // cheating. A move you cannot make simply does not happen, and says why.
+    var wind = Storm.hopDrift();
+    climber.intoWind = false;
+    if (wind !== 0 && dir !== 0 && (dir > 0) !== (wind > 0)) {
+      climber.intoWind = true;
+      if (Math.abs(dir) > 1) { refuseHop('THE WIND IS TOO STRONG'); return; }
+    }
+    if (run.breath < C.BREATH_LOW && Math.abs(dir) > 1) {
+      refuseHop('NO BREATH TO LEAP'); return;
+    }
+
     var targetRow = climber.row + 1;
     var targetLane = climber.lane + dir;
     if (dir !== 0) climber.facing = dir > 0 ? 1 : -1;
     // A two-lane leap is slower and higher: committing to one is a real cost.
     climber.hopDist = Math.abs(dir);
+    run.breath = Math.max(0, run.breath -
+      (climber.hopDist >= 2 ? C.BREATH_LEAP : C.BREATH_HOP) *
+      (currentZone().breath ? 1 : 0));
 
     var pos = climberPos();
     climber.fromX = pos.x;
@@ -516,8 +584,27 @@
 
     var zone = currentZone();
     Tools.update(dt, toScreenY);
-    F.updateGust(dt, zone, onGust);
-    F.updateWhiteout(dt, climberRowFloat(), zone);
+
+    var wasPhase = Storm.phase, wasShelter = Storm.sheltered;
+    Storm.update(dt, zone, atShelter());
+    if (Storm.phase !== wasPhase) {
+      if (Storm.phase === 'building') {
+        Aud.play('sfx_storm_warn', { volume: 0.5 });
+        setToast('STORM COMING', 1.8);
+      } else if (Storm.phase === 'storm') {
+        Aud.play('sfx_storm', { volume: 0.55 });
+        addShake(2, 0.5);
+      } else if (wasPhase === 'storm') {
+        setToast('THE SKY CLEARS', 1.4);
+      }
+    }
+    if (Storm.sheltered && !wasShelter) setToast('SHELTERED', 1.2);
+    // The storm keeps shaking the mountain for as long as it lasts.
+    if (Storm.isStorm() && !Storm.sheltered) addShake(1, 0.12);
+    updateBreath(dt, zone);
+    // The wind stops parting the fog while it is busy driving it.
+    F.updateGust(dt, zone, onGust, Storm.blocksGusts());
+    F.updateWhiteout(dt, climberRowFloat(), zone, Storm.frontSpeed());
     // Clear Sight: the lantern comes up at once and reaches a row further.
     F.updateLantern(dt, climber.state === 'idle' ? climber.idleTime : 0, run.clarity > 0);
     F.tick(dt);
@@ -586,6 +673,10 @@
         var hopTime = (climber.hopDist >= 2)
           ? C.LEAP_TIME
           : ((run.combo >= C.COMBO_FAST_AT) ? C.COMBO_HOP_TIME : C.HOP_TIME);
+        // Into the wind is a fight; with it at your back, a shove along.
+        if (climber.intoWind) hopTime *= C.WIND_UPWIND_MULT;
+        else if (Storm.hopDrift() !== 0 && climber.hopDist > 0) hopTime *= C.WIND_DOWNWIND_MULT;
+        if (run.breath < C.BREATH_LOW) hopTime *= C.BREATH_SLOW_MULT;
         climber.t += dt / hopTime;
         // A faint trail behind a fast climber shows the momentum.
         if (run.combo >= 3) {
@@ -657,17 +748,39 @@
     var zi = U.zoneIndexOf(U.clamp(climber.row, 0, C.ROWS));
     var night = nightAmount();
 
-    // Snow: none in the treeline, steady on the ridge, thick near the summit.
-    var rate = [0, 7, 15][zi];
+    // Snow: none in the forest, steady on the glacier, thick near the summit,
+    // and driven sideways once a storm has the face.
+    var storming = Storm.isStorm();
+    var warn = Storm.warn(zone);
+    var rate = [0, 4, 9, 13, 16][U.clamp(zi, 0, 4)] * (storming ? 2.6 : 1 + warn * 0.8);
+    var blow = storming ? (Storm.windDir || 1) * 150 : 0;
     if (rate > 0) {
       snowAcc += dt * rate;
       while (snowAcc >= 1) {
         snowAcc -= 1;
         var near = Math.random() < 0.22;
-        Part.spawn(near ? 'flake' : 'snow', Math.random() * C.W, -4, {
-          vx: -10 + Math.random() * 20, vy: near ? 46 + Math.random() * 24 : 25 + Math.random() * 20,
+        var sx = storming ? (blow > 0 ? -8 : C.W + 8) : Math.random() * C.W;
+        Part.spawn(near ? 'flake' : 'snow', storming ? sx : Math.random() * C.W,
+                   storming ? Math.random() * C.H : -4, {
+          vx: -10 + Math.random() * 20 + blow,
+          vy: near ? 46 + Math.random() * 24 : 25 + Math.random() * 20,
           life: 9, w: near ? 2 : 1, h: near ? 2 : 1, color: near ? '#ffffff' : COL.snow,
           alpha: near ? 0.75 + Math.random() * 0.25 : 0.45 + Math.random() * 0.4, layer: 'screen'
+        });
+      }
+    }
+
+    // Spindrift tearing across the face: the storm you can see.
+    if (storming) {
+      wispAcc += dt * 34;
+      while (wispAcc >= 1) {
+        wispAcc -= 1;
+        Part.spawn('streak', blow > 0 ? -40 : C.W + 40, Math.random() * C.H, {
+          vx: blow * (1.8 + Math.random() * 1.4), vy: (Math.random() - 0.5) * 14,
+          life: 0.6 + Math.random() * 0.4,
+          w: 14 + Math.floor(Math.random() * 30), h: 1 + (Math.random() < 0.3 ? 1 : 0),
+          color: Math.random() < 0.5 ? '#ffffff' : COL.whiteout,
+          alpha: 0.4 + Math.random() * 0.45, layer: 'screen'
         });
       }
     }
@@ -712,9 +825,9 @@
       }
     }
 
-    wispAcc += dt;
-    if (wispAcc > 2) {
-      wispAcc = 0;
+    driftAcc += dt;
+    if (driftAcc > 2 && !storming) {
+      driftAcc = 0;
       Part.spawn('wisp', -30, 60 + Math.random() * (C.H - 80), {
         vx: 22 + Math.random() * 18, vy: 0, life: 12,
         w: 24 + Math.floor(Math.random() * 20), h: 2 + Math.floor(Math.random() * 4),
@@ -849,7 +962,7 @@
       toScreenY: toScreenY,
       climberRowFloat: rf,
       fogLineY: fogLineY,
-      density: U.zoneField(U.clamp(rf, 0, C.ROWS), 'fogDensity', 8),
+      density: U.zoneField(U.clamp(rf, 0, C.ROWS), 'fogDensity', 8) + Storm.densityBonus(),
       color: Par.fogColorAt(rf),
       lanternTargets: lanternTargets,
       clearingPoints: clearingPoints,
@@ -1329,7 +1442,75 @@
               { scale: 1, color: Tools.flares > 0 ? COL.text : COL.textDim, shadow: COL.ink });
   }
 
+  // The weather, top-centre: six seconds of warning, then how much of the
+  // storm is left, and which way it will throw you.
+  function drawStormHUD(ctx) {
+    var zone = currentZone();
+    var warn = Storm.warn(zone);
+    if (warn <= 0.001) return;
+    var storm = Storm.isStorm();
+    var pulse = 0.55 + 0.45 * Math.sin(SITF.time * (storm ? 7 : 4 + warn * 8));
+
+    var w = 116, x = Math.round(C.W / 2 - w / 2), y = 5;
+    U.softPanel(ctx, x, y, w, 24, 0.5);
+
+    var label = storm ? 'STORM' : 'STORM INCOMING';
+    Font.draw(ctx, label, C.W / 2, y + 3, {
+      scale: 1, align: 'center', shadow: COL.ink,
+      color: storm ? COL.warn : COL.text, alpha: storm ? 1 : 0.55 + 0.45 * pulse
+    });
+
+    // A bar that fills as the warning runs out, then drains with the storm.
+    var bw = w - 16, bx = x + 8, by = y + 14;
+    var fill = storm ? Storm.stormLeft(zone) : warn;
+    ctx.save();
+    ctx.globalAlpha = 0.4;
+    ctx.fillStyle = COL.ink;
+    ctx.fillRect(bx, by, bw, 3);
+    ctx.globalAlpha = storm ? 1 : 0.6 + 0.4 * pulse;
+    ctx.fillStyle = storm ? COL.warn : COL.text;
+    ctx.fillRect(bx, by, Math.round(bw * fill), 3);
+    ctx.restore();
+
+    // Which way the wind will push a hop, if this stage has any.
+    if (Storm.windDir !== 0) {
+      var ax = C.W / 2 + (Storm.windDir > 0 ? w / 2 + 8 : -w / 2 - 8);
+      var d = Storm.windDir;
+      ctx.save();
+      ctx.globalAlpha = storm ? 1 : 0.4 + 0.6 * pulse;
+      ctx.fillStyle = storm ? COL.warn : COL.text;
+      for (var i = 0; i < 3; i++) {
+        ctx.fillRect(Math.round(ax + d * (i * 4 - 4)), y + 8 + i, 3, 1);
+        ctx.fillRect(Math.round(ax + d * (i * 4 - 4)), y + 14 - i, 3, 1);
+      }
+      ctx.fillRect(Math.round(ax - 6), y + 11, 13, 1);
+      ctx.restore();
+    }
+  }
+
+  // Thin air, beside the altitude gauge.
+  function drawBreath(ctx) {
+    if (!currentZone().breath && run.breath > 0.999) return;
+    var x = C.W - 12, top = 20, h = 88;
+    ctx.save();
+    ctx.globalAlpha = 0.45;
+    ctx.fillStyle = COL.ink;
+    ctx.fillRect(x, top, 3, h);
+    var lit = Math.round(h * U.clamp(run.breath, 0, 1));
+    ctx.globalAlpha = 1;
+    var low = run.breath < C.BREATH_LOW;
+    ctx.fillStyle = low ? COL.warn : COL.text;
+    if (low) ctx.globalAlpha = 0.55 + 0.45 * Math.sin(SITF.time * 8);
+    ctx.fillRect(x, top + h - lit, 3, lit);
+    ctx.restore();
+    if (low) {
+      Font.draw(ctx, 'REST', x + 1, top + h + 4,
+                { scale: 1, align: 'right', color: COL.warn, shadow: COL.ink });
+    }
+  }
+
   function drawHUD(ctx, rf) {
+    drawBreath(ctx);
     // Altitude readout, top-left.
     var alt = M.altitudeOf(U.clamp(rf, 0, C.ROWS));
     var altText = alt + ' M';
@@ -1370,6 +1551,8 @@
       ctx.drawImage(S.img.crystal, 9, 26);
       Font.draw(ctx, ct, 18, 27, { scale: 1, color: COL.accent, shadow: COL.ink });
     }
+
+    drawStormHUD(ctx);
 
     // Gust anticipation: three lines that pulse just before the wind arrives.
     var tg = F.timeToGust();

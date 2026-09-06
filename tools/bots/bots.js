@@ -86,6 +86,7 @@
     var greedy = !!opts.greedy;
     var useAxe = !!opts.axe;
     var useFlare = !!opts.flare;
+    var shelter = !!opts.shelter;   // wait out storms on a lit cairn
 
     var P = play(), I = SITF.Input, F = SITF.Fog;
     freshRun();
@@ -94,7 +95,7 @@
     var st = {
       opts: { cadence: cadence, guess: guess, memory: useMemory, rest: restEvery ? restEvery + 'x' + restFor : 'none' },
       hops: 0, seen: 0, remembered: 0, guesses: 0, waits: 0,
-      axes: 0, flares: 0,
+      axes: 0, flares: 0, stormFrames: 0, shelterFrames: 0, minBreath: 1,
       idleSeconds: 0, minGapRows: 99, deaths: [], frames: 0
     };
     var lastHop = -99, sinceRest = 0, pauseUntil = -1, idleStart = null;
@@ -117,9 +118,15 @@
         }
       }
 
+      if (s.storm === 'storm') st.stormFrames++;
+      if (s.sheltered) st.shelterFrames++;
+      if (s.breath < st.minBreath) st.minBreath = s.breath;
+
       if (s.mode === 'idle') {
         if (idleStart === null) idleStart = SITF.time;
         st.idleSeconds += 1 / 60;
+        // Sit out the storm where it cannot reach you.
+        if (shelter && s.sheltered) { SITF.advance(1 / 60, false); continue; }
         var ready = (SITF.time - lastHop) >= cadence && SITF.time >= pauseUntil;
         if (ready) {
           var opt = options(s.row + 1, s.lane, mem);
@@ -183,6 +190,9 @@
     st.bestCombo = fin.bestCombo;
     st.minGapRows = +st.minGapRows.toFixed(1);
     st.guessRate = st.hops ? +(st.guesses / st.hops).toFixed(3) : 0;
+    st.stormSec = +(st.stormFrames / 60).toFixed(1);
+    st.shelterSec = +(st.shelterFrames / 60).toFixed(1);
+    st.minBreath = +st.minBreath.toFixed(2);
     st.waits = +st.waits.toFixed(1);
     st.idleSeconds = +st.idleSeconds.toFixed(1);
     return st;
@@ -191,13 +201,14 @@
   // The standard battery. Any change to the reveal economy or the storm
   // should move these numbers in a direction we can argue for.
   B.PROFILES = [
-    { name: 'expert',    cadence: 0.35, guess: 'wait', axe: true, flare: true },
-    { name: 'competent', cadence: 0.5,  guess: 'wait', axe: true, flare: true },
-    { name: 'steady',    cadence: 0.8,  guess: 'wait', axe: true },
-    { name: 'cautious',  cadence: 1.3,  guess: 'never', axe: true },
-    { name: 'hesitant',  cadence: 0.5,  guess: 'wait', axe: true, restEvery: 6, restFor: 2 },
-    { name: 'no-tools',  cadence: 0.5,  guess: 'wait' },
-    { name: 'no-memory', cadence: 0.5,  guess: 'wait', useMemory: false, axe: true },
+    { name: 'expert',    cadence: 0.35, guess: 'wait', axe: true, flare: true, shelter: true },
+    { name: 'competent', cadence: 0.5,  guess: 'wait', axe: true, flare: true, shelter: true },
+    { name: 'steady',    cadence: 0.8,  guess: 'wait', axe: true, shelter: true },
+    { name: 'cautious',  cadence: 1.3,  guess: 'never', axe: true, shelter: true },
+    { name: 'hesitant',  cadence: 0.5,  guess: 'wait', axe: true, shelter: true, restEvery: 6, restFor: 2 },
+    { name: 'no-tools',  cadence: 0.5,  guess: 'wait', shelter: true },
+    { name: 'no-shelter',cadence: 0.5,  guess: 'wait', axe: true, flare: true },
+    { name: 'no-memory', cadence: 0.5,  guess: 'wait', useMemory: false, axe: true, shelter: true },
     { name: 'reckless',  cadence: 0.3,  guess: 'always' }
   ];
 
@@ -211,7 +222,8 @@
         profile: p.name, result: r.result, row: r.row, time: r.time,
         hops: r.hops, seen: r.seen, mem: r.remembered, guesses: r.guesses,
         guessRate: r.guessRate, axes: r.axes, flares: r.flares,
-        slips: r.slips, blind: r.blind,
+        slips: r.slips, blind: r.blind, stormSec: r.stormSec,
+        shelterSec: r.shelterSec, minBreath: r.minBreath,
         score: r.score, minGap: r.minGapRows, waited: r.waits
       });
     }

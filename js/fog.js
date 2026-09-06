@@ -105,7 +105,16 @@
 
   // --- gust ---------------------------------------------------------------
 
-  F.updateGust = function (dt, zone, onFire) {
+  // `suppress` stops new gusts starting (the storm has the wind), but a gust
+  // already sweeping must still be allowed to finish: freezing one mid-sweep
+  // leaves the face permanently open behind it.
+  F.updateGust = function (dt, zone, onFire, suppress) {
+    if (suppress && F.gustProgress < 0) {
+      F.gustTimer = Math.max(F.gustTimer, 0.6);
+      F.gustPending = false;
+      F.gustDelayLeft = 0;
+      return;
+    }
     if (F.blowing) {
       F.globalReveal = Math.min(1, F.globalReveal + dt / 2.0);
       return;
@@ -158,8 +167,10 @@
 
   // --- whiteout -----------------------------------------------------------
 
-  F.updateWhiteout = function (dt, climberRow, zone) {
-    var speed = zone.whiteoutSpeed;
+  // `mult` is the weather's contribution: 1 in calm air, more in a storm, and
+  // 0 while the climber is sheltering somewhere the front cannot pass.
+  F.updateWhiteout = function (dt, climberRow, zone, mult) {
+    var speed = zone.whiteoutSpeed * (mult == null ? 1 : mult);
     if (climberRow - F.frontRow > C.WHITEOUT_CATCHUP_GAP) speed *= C.WHITEOUT_CATCHUP_MULT;
     F.frontRow += speed * dt;
   };

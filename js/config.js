@@ -33,13 +33,24 @@ SITF.Config = {
 
   // Stage table. `forkChance` is a second reachable foothold on the row: the
   // route braids rather than running as a single thread.
+  // stormCalm/Build/Dur are the weather cycle in seconds; `wind` means a
+  // storm shoves each hop a lane downwind; `breath` means thin air.
   ZONES: [
-    { name: 'BASE CAMP',  from: 0,   to: 19,  fogDensity: 0.90,  gustInterval: 4.0, revealRows: 9, whiteoutSpeed: 0.40, crumbleChance: 0.00, mercyChance: 0.30, forkChance: 0.30, leapChance: 0.10, gustDelay: 0, crystalChance: 0.10 },
-    { name: 'TREELINE',   from: 20,  to: 59,  fogDensity: 0.955, gustInterval: 4.5, revealRows: 7, whiteoutSpeed: 0.62, crumbleChance: 0.06, mercyChance: 0.22, forkChance: 0.32, leapChance: 0.18, gustDelay: 0, crystalChance: 0.14 },
-    { name: 'THE GLACIER',from: 60,  to: 99,  fogDensity: 0.965, gustInterval: 5.5, revealRows: 6, whiteoutSpeed: 0.72, crumbleChance: 0.14, mercyChance: 0.14, forkChance: 0.30, leapChance: 0.26, gustDelay: 0, crystalChance: 0.16 },
-    { name: 'THE RIDGE',  from: 100, to: 139, fogDensity: 0.975, gustInterval: 6.5, revealRows: 5, whiteoutSpeed: 0.82, crumbleChance: 0.20, mercyChance: 0.08, forkChance: 0.26, leapChance: 0.30, gustDelay: 0, crystalChance: 0.18 },
-    { name: 'DEATH ZONE', from: 140, to: 180, fogDensity: 0.985, gustInterval: 8.0, revealRows: 3, whiteoutSpeed: 0.94, crumbleChance: 0.28, mercyChance: 0.00, forkChance: 0.20, leapChance: 0.34, gustDelay: 1.0, crystalChance: 0.22 }
+    { name: 'BASE CAMP',  from: 0,   to: 19,  fogDensity: 0.90,  gustInterval: 4.0, revealRows: 9, whiteoutSpeed: 0.40, crumbleChance: 0.00, mercyChance: 0.30, forkChance: 0.30, leapChance: 0.10, gustDelay: 0, crystalChance: 0.10, stormCalm: 999, stormBuild: 6, stormDur: 0,  wind: false, breath: false },
+    { name: 'TREELINE',   from: 20,  to: 59,  fogDensity: 0.955, gustInterval: 4.5, revealRows: 7, whiteoutSpeed: 0.62, crumbleChance: 0.06, mercyChance: 0.22, forkChance: 0.32, leapChance: 0.18, gustDelay: 0, crystalChance: 0.14, stormCalm: 26,  stormBuild: 6, stormDur: 10, wind: false, breath: false },
+    { name: 'THE GLACIER',from: 60,  to: 99,  fogDensity: 0.965, gustInterval: 5.5, revealRows: 6, whiteoutSpeed: 0.72, crumbleChance: 0.14, mercyChance: 0.14, forkChance: 0.30, leapChance: 0.26, gustDelay: 0, crystalChance: 0.16, stormCalm: 23,  stormBuild: 6, stormDur: 12, wind: false, breath: false },
+    { name: 'THE RIDGE',  from: 100, to: 139, fogDensity: 0.975, gustInterval: 6.5, revealRows: 5, whiteoutSpeed: 0.82, crumbleChance: 0.20, mercyChance: 0.08, forkChance: 0.26, leapChance: 0.30, gustDelay: 0, crystalChance: 0.18, stormCalm: 21,  stormBuild: 6, stormDur: 13, wind: true,  breath: false },
+    { name: 'DEATH ZONE', from: 140, to: 180, fogDensity: 0.985, gustInterval: 8.0, revealRows: 3, whiteoutSpeed: 0.94, crumbleChance: 0.28, mercyChance: 0.00, forkChance: 0.20, leapChance: 0.34, gustDelay: 1.0, crystalChance: 0.22, stormCalm: 19,  stormBuild: 6, stormDur: 14, wind: true,  breath: true }
   ],
+
+  // Weather and thin air.
+  STORM_FRONT_MULT: 3.0,    // how much faster the whiteout climbs in a storm
+  STORM_FOG_BONUS: 0.02,
+  BREATH_HOP: 0.075, BREATH_LEAP: 0.14,
+  BREATH_REST: 0.26, BREATH_REST_CAIRN: 0.62,
+  BREATH_LOW: 0.25,         // below this: no leaps, and hops come slower
+  BREATH_SLOW_MULT: 1.45,
+  WIND_UPWIND_MULT: 1.55, WIND_DOWNWIND_MULT: 0.85,
   GUST_DURATION: 1.6, GUST_WIPE_PORTION: 0.5, GUST_FADE_PORTION: 0.25,
   ALT_BASE_M: 1200, ALT_PER_ROW_M: 20,
   SEED: 64,
