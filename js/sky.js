@@ -61,6 +61,19 @@
     return cv;
   }
 
+  // One lit band, then its own colour flooded to the foot of the screen.
+  function paintLayer(ctx, L, imgKey, bodyKey, alpha, off, yy) {
+    if (alpha <= 0.01) return;
+    ctx.globalAlpha = alpha;
+    ctx.drawImage(L[imgKey], Math.round(off), yy);
+    ctx.drawImage(L[imgKey], Math.round(off) + C.W, yy);
+    var below = C.H - (yy + L.h);
+    if (below > 0) {
+      ctx.fillStyle = L[bodyKey];
+      ctx.fillRect(0, yy + L.h, C.W, below);
+    }
+  }
+
   function build() {
     if (built) return;
     built = true;
@@ -75,11 +88,18 @@
     for (var i = 0; i < defs.length; i++) {
       var d = defs[i];
       var deep = i / (defs.length - 1);
+      // Body colours are kept alongside the strips: below a strip the same
+      // colour is flooded to the foot of the screen, so a bank never ends on
+      // a ruled line partway down the frame.
+      var bodyDay = U.mixHex('#c2d3e4', '#a4bbd1', deep);
+      var bodyDusk = U.mixHex('#8a688a', '#54456c', deep);
+      var bodyNight = U.mixHex('#1b2f48', '#101f34', deep);
       cloudLayers.push({
         h: d.h, par: d.par, drift: d.drift,
-        day:   strip(d.seed, d.h, '#e8eff6', U.mixHex('#c2d3e4', '#a4bbd1', deep), '#ffffff', '#f1f6fa'),
-        dusk:  strip(d.seed, d.h, U.mixHex('#e3aaa3', '#a97d95', deep), U.mixHex('#8a688a', '#54456c', deep), '#ffd9b0', U.mixHex('#f0b898', '#c58f98', deep)),
-        night: strip(d.seed, d.h, U.mixHex('#3b5a7a', '#233a52', deep), U.mixHex('#1b2f48', '#101f34', deep), U.mixHex(COL.accent, '#9fd8ff', 0.5), U.mixHex('#5f8fb3', '#3b5a7a', 0.5))
+        bodyDay: bodyDay, bodyDusk: bodyDusk, bodyNight: bodyNight,
+        day:   strip(d.seed, d.h, '#e8eff6', bodyDay, '#ffffff', '#f1f6fa'),
+        dusk:  strip(d.seed, d.h, U.mixHex('#e3aaa3', '#a97d95', deep), bodyDusk, '#ffd9b0', U.mixHex('#f0b898', '#c58f98', deep)),
+        night: strip(d.seed, d.h, U.mixHex('#3b5a7a', '#233a52', deep), bodyNight, U.mixHex(COL.accent, '#9fd8ff', 0.5), U.mixHex('#5f8fb3', '#3b5a7a', 0.5))
       });
     }
 
@@ -274,10 +294,12 @@
   };
 
   // ---- the cloud deck -----------------------------------------------------
-  // A layer of cloud at a fixed altitude around row 40. Below it you see it
-  // coming down from above (through the fog, mostly); at it you are inside
-  // it; above it, it settles into a sea at the bottom of the screen that
-  // takes the colour of whatever light is on it.
+  // The sea of cloud you rise out of. It fades in through the treeline, then
+  // settles into a bank along the foot of the screen that sinks a little
+  // further away with altitude and takes the colour of whatever light is on
+  // it. It stays below the climber so it never fights the route for
+  // attention, and every layer floods to the bottom of the frame: a bank that
+  // stopped at the foot of its strip left a ruled line across the view.
   Sky.drawClouds = function (ctx, rf, t) {
     build();
     var a = cloudIn(rf);
@@ -285,25 +307,21 @@
     var dusk = SITF.Parallax.duskAt(rf);
     var night = SITF.Parallax.nightAt(rf);
     var wDay = 1 - dusk, wDusk = dusk * (1 - night), wNight = night;
-    var d = (rf - 42) * C.ROW_H;
+    var d = Math.max(0, (rf - 42) * C.ROW_H);
 
     ctx.save();
     var seaTop = C.H;
     for (var i = 0; i < cloudLayers.length; i++) {
       var L = cloudLayers[i];
-      // Perspective: the deck drops away fast at first, then converges on
-      // a band along the bottom the further above it you get.
-      var y;
-      if (d >= 0) y = 226 + (24 + i * 14) * (1 - Math.exp(-d * L.par / 260)) + i * 4;
-      else y = 226 + d * L.par * 0.55 + i * 4;
-      if (y > C.H || y + L.h < 0) continue;
-      if (y < seaTop) seaTop = y;
+      // Perspective: the deck falls away quickly at first, then converges.
+      var y = 258 + i * 7 + 26 * (1 - Math.exp(-d / 900));
       var off = -((t * L.drift) % C.W);
       var yy = Math.round(y);
+      if (yy < seaTop) seaTop = yy;
       var layerA = a * (0.7 + 0.3 * (i / (cloudLayers.length - 1)));
-      if (wDay > 0.01)   { ctx.globalAlpha = layerA * wDay;   ctx.drawImage(L.day, Math.round(off), yy);   ctx.drawImage(L.day, Math.round(off) + C.W, yy); }
-      if (wDusk > 0.01)  { ctx.globalAlpha = layerA * wDusk;  ctx.drawImage(L.dusk, Math.round(off), yy);  ctx.drawImage(L.dusk, Math.round(off) + C.W, yy); }
-      if (wNight > 0.01) { ctx.globalAlpha = layerA * wNight; ctx.drawImage(L.night, Math.round(off), yy); ctx.drawImage(L.night, Math.round(off) + C.W, yy); }
+      paintLayer(ctx, L, 'day', 'bodyDay', layerA * wDay, off, yy);
+      paintLayer(ctx, L, 'dusk', 'bodyDusk', layerA * wDusk, off, yy);
+      paintLayer(ctx, L, 'night', 'bodyNight', layerA * wNight, off, yy);
     }
     ctx.restore();
 
@@ -316,13 +334,17 @@
       if (sunA > 0.01) glow(ctx, 428 + 36 * sunK, seaTop + 22, 150, '#ff9a5c', 0.28 * sunA);
       var auroraA = a * wNight * (0.4 + 0.6 * summitNear(rf));
       if (auroraA > 0.01) {
+        // Ramped in from well above the cloud tops: a gradient that began at
+        // the sea's top edge put a ruled line right across the frame.
         ctx.save();
         ctx.globalCompositeOperation = 'lighter';
-        var sg = ctx.createLinearGradient(0, seaTop, 0, C.H);
-        sg.addColorStop(0, U.rgba(COL.accent, 0.14 * auroraA));
+        var gTop = Math.max(0, Math.round(seaTop) - 54);
+        var sg = ctx.createLinearGradient(0, gTop, 0, C.H);
+        sg.addColorStop(0, U.rgba(COL.accent, 0));
+        sg.addColorStop(0.45, U.rgba(COL.accent, 0.14 * auroraA));
         sg.addColorStop(1, U.rgba(COL.accent, 0));
         ctx.fillStyle = sg;
-        ctx.fillRect(0, Math.round(seaTop), C.W, C.H - Math.round(seaTop));
+        ctx.fillRect(0, gTop, C.W, C.H - gTop);
         ctx.restore();
       }
     }

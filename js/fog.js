@@ -195,8 +195,11 @@
 
     // Bank of fog above the climber. Its lower edge rolls rather than sitting
     // on a ruled line, so it reads as weather instead of a UI element.
-    var skirt = 12; // half-res px (24 real)
-    var steps = [0.45, 0.22, 0.08];
+    // The skirt is a per-pixel ramp rather than three wide steps: stepping it
+    // put visible bands, and starting the first step at 0.45 left a ruled
+    // line where the solid bank ended. It now leaves the bank at nearly full
+    // strength and falls away over 32 real pixels.
+    var skirt = 16; // half-res px (32 real)
     lowCtx.fillStyle = color;
 
     for (var x = 0; x < LOW_W; x += 2) {
@@ -207,29 +210,50 @@
       lowCtx.globalAlpha = density;
       if (lineY > 0) lowCtx.fillRect(x, 0, 2, lineY);
 
-      // Soft skirt below the edge so it does not end in a hard cut.
-      for (var i = 0; i < steps.length; i++) {
-        lowCtx.globalAlpha = density * steps[i];
-        lowCtx.fillRect(x, lineY + i * (skirt / 3), 2, skirt / 3 + 1);
+      // Each column's steps sit at a different sub-pixel offset, so the ramp
+      // does not quantise into bands that line up across the screen.
+      var jitter = ((x * 7919) % 32) / 32;
+      for (var i = 0; i < skirt; i++) {
+        var u = (i + 1) / skirt;
+        lowCtx.globalAlpha = density * (1 - u) * (1 - u);
+        lowCtx.fillRect(x, lineY + i + jitter, 2, 1);
       }
     }
     lowCtx.globalAlpha = 1;
 
-    // Drifting cloud layers, clipped to the fog region.
+    // Drifting cloud layers inside the bank. The clip used to stop dead at
+    // the foot of the skirt, which showed as a rule straight across the
+    // screen; the last rows are now faded out one at a time instead.
+    var ax = Math.round(-((t * 8) % C.W) / 2);
+    var bx = Math.round(((t * 5) % C.W) / 2);
+    var by = Math.round(Math.sin(t * 0.3) * 3);
+    var tileBottom = Math.max(0, fogLineY + skirt);
+    var tileFade = 20;
+    var solidBottom = Math.max(0, Math.floor(tileBottom - tileFade));
+
     lowCtx.save();
     lowCtx.beginPath();
-    lowCtx.rect(0, 0, LOW_W, Math.max(0, fogLineY + skirt));
+    lowCtx.rect(0, 0, LOW_W, solidBottom);
     lowCtx.clip();
     lowCtx.globalAlpha = density * 0.9;
-    var ax = -((t * 8) % C.W) / 2;
-    lowCtx.drawImage(tileA, Math.round(ax), 0);
-    lowCtx.drawImage(tileA, Math.round(ax + LOW_W), 0);
+    lowCtx.drawImage(tileA, ax, 0);
+    lowCtx.drawImage(tileA, ax + LOW_W, 0);
     lowCtx.globalAlpha = density * 0.7;
-    var bx = ((t * 5) % C.W) / 2;
-    var by = Math.sin(t * 0.3) * 3;
-    lowCtx.drawImage(tileB, Math.round(bx - LOW_W), Math.round(by));
-    lowCtx.drawImage(tileB, Math.round(bx), Math.round(by));
+    lowCtx.drawImage(tileB, bx - LOW_W, by);
+    lowCtx.drawImage(tileB, bx, by);
     lowCtx.restore();
+
+    for (var s = 0; s < tileFade; s++) {
+      var ty = solidBottom + s;
+      if (ty >= LOW_H || ty >= tileBottom) break;
+      var tf = 1 - (s + 1) / tileFade;
+      tf *= tf;
+      tileRow(tileA, ax, ty, ty, density * 0.9 * tf);
+      tileRow(tileA, ax + LOW_W, ty, ty, density * 0.9 * tf);
+      tileRow(tileB, bx - LOW_W, ty, ty - by, density * 0.7 * tf);
+      tileRow(tileB, bx, ty, ty - by, density * 0.7 * tf);
+    }
+    lowCtx.globalAlpha = 1;
 
     // ---- punch the reveals out of the fog ----
     lowCtx.globalCompositeOperation = 'destination-out';
@@ -245,14 +269,31 @@
         // Not a full punch: the wind thins the fog rather than deleting it,
         // so the mountain behind stays atmospheric.
         ga *= 0.82;
-        lowCtx.globalAlpha = ga;
         lowCtx.fillStyle = '#000';
-        lowCtx.fillRect(0, topY, Math.max(0, wipeX), h);
-        // Soft leading edge.
-        var edge = 20;
-        for (var e = 0; e < 3; e++) {
-          lowCtx.globalAlpha = ga * (0.7 - e * 0.22);
-          lowCtx.fillRect(wipeX + e * (edge / 3), topY, edge / 3 + 1, h);
+        var bw = Math.max(0, wipeX);
+        // The top of the cleared band used to be a rectangle edge, which read
+        // as a ruled line straight across the sky. It now feathers in over
+        // 24 real pixels, and the leading edge is ramped in finer columns.
+        var feather = Math.min(12, Math.floor(h));
+        var ec = 6, ew = 4;
+        for (var s = 0; s < feather; s++) {
+          var v = (s + 1) / feather;
+          v *= v;
+          lowCtx.globalAlpha = ga * v;
+          lowCtx.fillRect(0, topY + s, bw, 1);
+          for (var e = 0; e < ec; e++) {
+            lowCtx.globalAlpha = ga * v * (1 - (e + 0.5) / ec);
+            lowCtx.fillRect(wipeX + e * ew, topY + s, ew, 1);
+          }
+        }
+        var restY = topY + feather, restH = h - feather;
+        if (restH > 0) {
+          lowCtx.globalAlpha = ga;
+          lowCtx.fillRect(0, restY, bw, restH);
+          for (var e2 = 0; e2 < ec; e2++) {
+            lowCtx.globalAlpha = ga * (1 - (e2 + 0.5) / ec);
+            lowCtx.fillRect(wipeX + e2 * ew, restY, ew, restH);
+          }
         }
       }
     }
@@ -289,6 +330,14 @@
     ctx.drawImage(low, 0, 0, C.W, C.H);
     ctx.restore();
   };
+
+  // One destination row of a tile, so the bank's texture can be faded out
+  // row by row instead of clipped off.
+  function tileRow(img, dx, dy, srcY, alpha) {
+    if (alpha <= 0.003 || srcY < 0 || srcY >= img.height) return;
+    lowCtx.globalAlpha = alpha;
+    lowCtx.drawImage(img, 0, srcY, img.width, 1, dx, dy, img.width, 1);
+  }
 
   function punchRadial(x, y, r, alpha, softFrom) {
     if (r <= 0 || alpha <= 0) return;
