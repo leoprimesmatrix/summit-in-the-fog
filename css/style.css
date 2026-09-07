@@ -1,24 +1,92 @@
+@font-face {
+  font-family: "m5x7";
+  src: url("../assets/fonts/m5x7.ttf");
+  font-display: block;
+}
+
 html, body {
   margin: 0;
   padding: 0;
+  width: 100%;
   height: 100%;
-  background: #06101e;
   overflow: hidden;
-}
-body {
-  display: block;
-  -webkit-user-select: none;
-  -moz-user-select: none;
+  background: #04070d;
+  /* The frame is letterboxed onto this, so it should read as the room the
+     screen is in rather than as part of the picture. */
+  color: #d6e2ee;
+  font-family: "m5x7", monospace;
+  -webkit-font-smoothing: none;
   user-select: none;
+  -webkit-user-select: none;
   touch-action: none;
 }
-#game {
+
+canvas#game {
   position: absolute;
-  left: 0;
-  top: 0;
+  display: block;
   image-rendering: pixelated;
-  image-rendering: -moz-crisp-edges;
   image-rendering: crisp-edges;
-  background: #06101e;
+  background: #04070d;
   outline: none;
+}
+
+/* --- loading ------------------------------------------------------------ */
+
+#loader {
+  position: fixed;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: radial-gradient(ellipse at 50% 40%, #12233c 0%, #05080f 72%);
+  z-index: 10;
+  transition: opacity 0.4s ease;
+}
+
+#loader.gone { opacity: 0; pointer-events: none; }
+
+#loader .wrap { text-align: center; width: 320px; }
+
+#loader h1 {
+  font-size: 54px;
+  letter-spacing: 10px;
+  margin: 0 0 22px 0;
+  font-weight: normal;
+  color: #eaf5ff;
+  text-shadow: 0 0 24px rgba(120, 190, 255, 0.55), 0 3px 0 #12293f;
+}
+
+#loader .track {
+  height: 4px;
+  background: rgba(255, 255, 255, 0.09);
+  overflow: hidden;
+}
+
+#loader #bar {
+  height: 100%;
+  width: 0%;
+  background: linear-gradient(90deg, #4fb8e8, #b9ecff);
+  transition: width 0.18s linear;
+  box-shadow: 0 0 12px rgba(120, 210, 255, 0.7);
+}
+
+#loader p {
+  margin: 14px 0 0 0;
+  font-size: 20px;
+  letter-spacing: 3px;
+  color: #7f97b0;
+  text-transform: uppercase;
+}
+
+#loader .fail {
+  max-width: 460px;
+  text-align: center;
+}
+
+#loader .fail p {
+  font-size: 22px;
+  line-height: 1.4;
+  color: #c9d8e8;
+  letter-spacing: 1px;
+  text-transform: none;
 }

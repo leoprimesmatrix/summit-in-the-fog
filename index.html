@@ -3,34 +3,76 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, user-scalable=no">
-<title>Summit in the Fog</title>
+<meta name="description" content="ICEFALL - climb a mountain that is trying to fall on you.">
+<title>ICEFALL</title>
 <link rel="stylesheet" href="css/style.css">
-<style>@font-face { font-family: "m5x7"; src: url("assets/fonts/m5x7.ttf"); }</style>
 </head>
 <body>
-<canvas id="game" width="576" height="324"></canvas>
-<script src="js/config.js"></script>
-<script src="js/util.js"></script>
-<script src="js/font.js"></script>
-<script src="js/input.js"></script>
-<script src="js/audio.js"></script>
-<script src="js/assets.js"></script>
-<script src="js/sprites.js"></script>
-<script src="js/particles.js"></script>
-<script src="js/sky.js"></script>
-<script src="js/parallax.js"></script>
-<script src="js/face.js"></script>
-<script src="js/rockface.js"></script>
-<script src="js/mountain.js"></script>
-<script src="js/fog.js"></script>
-<script src="js/tools.js"></script>
-<script src="js/storm.js"></script>
-<script src="js/logo.js"></script>
-<script src="js/settings.js"></script>
-<script src="js/states/fly.js"></script>
-<script src="js/states/title.js"></script>
-<script src="js/states/play.js"></script>
-<script src="js/states/end.js"></script>
-<script src="js/main.js"></script>
+<canvas id="game" width="640" height="360"></canvas>
+
+<div id="loader">
+  <div class="wrap">
+    <h1>ICEFALL</h1>
+    <div class="track"><div id="bar"></div></div>
+    <p id="note">Starting</p>
+  </div>
+</div>
+
+<!-- core -->
+<script src="src/core/config.js"></script>
+<script src="src/core/util.js"></script>
+
+<!-- gpu -->
+<script src="src/gfx/gl.js"></script>
+<script src="src/gfx/shaders.js"></script>
+<script src="src/gfx/batch.js"></script>
+
+<!-- art authoring -->
+<script src="src/art/normalgen.js"></script>
+<script src="src/art/atlas.js"></script>
+<script src="src/art/paint.js"></script>
+<script src="src/art/rock.js"></script>
+<script src="src/art/climber.js"></script>
+<script src="src/art/props.js"></script>
+<script src="src/art/logo.js"></script>
+<script src="src/art/backdrop.js"></script>
+
+<!-- drawing -->
+<script src="src/gfx/draw.js"></script>
+<script src="src/core/font.js"></script>
+<script src="src/core/input.js"></script>
+<script src="src/core/audio.js"></script>
+<script src="src/gfx/camera.js"></script>
+<script src="src/gfx/lights.js"></script>
+<script src="src/gfx/pipeline.js"></script>
+<script src="src/gfx/scene.js"></script>
+
+<!-- world -->
+<script src="src/world/terrain.js"></script>
+<script src="src/world/chunks.js"></script>
+<script src="src/world/props.js"></script>
+
+<!-- effects -->
+<script src="src/fx/particles.js"></script>
+<script src="src/fx/weather.js"></script>
+
+<!-- game -->
+<script src="src/game/player.js"></script>
+<script src="src/game/grapple.js"></script>
+<script src="src/game/hazards.js"></script>
+<script src="src/game/avalanche.js"></script>
+<script src="src/game/director.js"></script>
+<script src="src/game/run.js"></script>
+
+<!-- ui -->
+<script src="src/ui/hud.js"></script>
+<script src="src/ui/menu.js"></script>
+
+<!-- states -->
+<script src="src/states/title.js"></script>
+<script src="src/states/play.js"></script>
+<script src="src/states/end.js"></script>
+
+<script src="src/main.js"></script>
 </body>
 </html>

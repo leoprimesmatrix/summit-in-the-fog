@@ -1,37 +1,48 @@
 # Credits
 
-## Summit in the Fog
+## ICEFALL
 
-Made for Micro Jam 064. Theme: **Mountains**. Prerequisite: **the fog hides the path**.
+Made for Micro Jam 064. Theme: **Mountains**.
 
 ## Art
 
-**Backgrounds** - "Nature Landscapes Free Pixel Art" by [CraftPix](https://craftpix.net/).
-Two of the eight packs are used: the alpine daytime set (`nature_3`) for the lower
-mountain and the aurora night set (`nature_6`) for the summit.
-License: <https://craftpix.net/file-licenses/>
+**Everything you see is generated in code at boot.** There are no image files
+in this game. The alpine granite, the glacier ice, the wind slab and the snow
+are procedural materials; the climber is a rig of angles rather than a sheet of
+frames; the falling ice, the cairns, the crystals, the flag, the particles, the
+interface and the ICEFALL wordmark are all drawn into an atlas when the game
+starts. The range on the horizon is geometry, retinted every frame by the
+altitude you are at.
 
-**Everything else is original, drawn in code** for this jam: the climber, the rock
-ledges, the crumbling ledges, the cairns, the summit flag, the lantern glow, the
-fog layers, the whiteout, the particles and the UI.
+Every one of those sprites also gets a normal map, derived from its own
+silhouette and painted luminance by `src/art/normalgen.js`, which is what lets
+a lantern actually shape it.
 
 ## Font
 
 **m5x7** by Daniel Linssen (Managore), free to use.
-https://managore.itch.io/m5x7 - shipped as assets/fonts/m5x7.ttf and rendered
-to hard pixels at boot. A built-in 5x7 bitmap font is the fallback if the file
-is missing.
+<https://managore.itch.io/m5x7> - shipped as `assets/fonts/m5x7.ttf` and
+rasterised to hard pixels at boot. Each glyph is packed into the same sprite
+atlas as the art, so text is drawn by the same batcher as everything else.
 
 ## Audio
 
-All sound effects and the wind bed are **original**, generated for this jam by
-`tools/gen_sfx.js` and shipped as WAV files in `assets/audio/`. Playback uses
-`HTMLAudioElement` only; **no Web Audio API is used anywhere.** There is no
-music by design. Wind and effects volume live in the in-game Settings screen
-(S on the title or from pause).
+All sound effects and both ambience beds are **original**, generated for this
+jam by `tools/gen_sfx.js` and shipped as plain WAV files in `assets/audio/`.
+Playback uses `HTMLAudioElement` only; **no Web Audio API is used anywhere in
+the game.** There is no music by design. Sound volume and mute live in the
+in-game Settings screen.
 
 ## Code
 
-Written from scratch in plain JavaScript with no libraries, no build step and no
-external runtime dependencies. Rendered on a single HTML5 canvas at an internal
-resolution of 576x324, integer-scaled to the window.
+Written from scratch in plain JavaScript: no libraries, no modules, no bundler
+and no build step. Rendered with WebGL2 at an internal resolution of 640x360
+and scaled to the window.
+
+## The previous game
+
+`legacy/` holds **Summit in the Fog**, the Micro Jam 064 entry this project
+replaced, kept intact and still playable at `legacy/index.html`. Its
+backgrounds are from CraftPix's free "Nature Landscapes" pixel art pack
+(<https://craftpix.net/file-licenses/>); its own audio lives in
+`legacy/audio/`. ICEFALL uses none of that art.

@@ -16,7 +16,7 @@
     'sfx_crumble', 'sfx_whiteout', 'sfx_summit', 'sfx_ui', 'sfx_crystal', 'sfx_echo'
   ];
   var EXTS = ['wav', 'ogg', 'mp3'];
-  var DIR = 'assets/audio/';
+  var DIR = 'audio/';
 
   var VOL = { music: 0.22, ambient: 0.14, sfx: 0.7, ui: 0.5 };
   var POOL_SIZE = 4;

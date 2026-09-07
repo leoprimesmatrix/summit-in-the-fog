@@ -1,105 +1,155 @@
-# Summit in the Fog
+# ICEFALL
 
-A short pixel-art climbing game made for **Micro Jam 064**.
-Theme: **Mountains**. Prerequisite: **the fog hides the path**.
+Climb a mountain that is trying to fall on you.
 
-## How to play it
+A vertical precision platformer for **Micro Jam 064** (theme: **Mountains**).
+Six and a half thousand metres of rock and ice, an avalanche behind you, and a
+sky that keeps dropping pieces of the mountain on your head.
 
-Double-click `index.html`. That is all. There is no build step, no install and
-no server needed.
+## Play it
 
-To serve it over HTTP instead (for itch.io testing or a LAN):
+Open `index.html`. There is no build step and no install.
+
+To serve it over HTTP instead (for itch.io testing, or a LAN):
 
 ```bash
 node serve.js 8144
 ```
 
-## The goal
+It needs **WebGL2**, which every current browser has.
 
-Climb from the treeline at 1800 m to the summit at 4800 m before the whiteout
-rising behind you swallows the mountain. Then do it faster.
+## The climb
 
-## The idea
+You start in the boulder field at 2100 m. The summit is at 8848 m, and the
+route to it is a chain of ledges that never asks for more than a plain jump -
+every step is checked against the jump arc when the mountain is generated, so
+nothing on the critical path needs a trick you were not taught.
 
-The path up the mountain is a chain of rock ledges, one per row, spread across
-five lanes on a rock face. **Fog hides every ledge above you**, and information
-is never free: each way of finding the route answers a different question, and
-each one costs something.
+Everything else on the mountain is trying to stop you.
 
-- **Your lantern** reads *across*: stand still and it lights every lane on the
-  row above. Always safe, always slow, and the whiteout is still climbing.
-- **Your axe** reads *up*: throw it up a lane and it sparks off the first rock
-  it finds, lighting that lane for four rows. You cannot hop while it is in
-  the air.
-- **Flares** read both at once: ten rows, every lane, for a few seconds. You
-  carry three.
-- **Gusts** are the weather's gift: every few seconds the wind sweeps the face
-  clear. They cost nothing, but they come on their own schedule.
-- **Cairns.** Every twelfth ledge carries a cairn. Light it to set a
-  checkpoint, clear a lasting patch of fog around it, and shove the whiteout
-  back down the mountain.
-- **Crystals**, often on the riskier fork, pay points and grant Clear Sight:
-  for six hops the lantern lights at once and reaches two rows.
+**Falling ice.** A marker appears on the top edge of the frame and the mountain
+rumbles. Just under a second later a block comes through it. Small ones
+shatter where they land; big ones bounce on down the face and are far more
+dangerous on the second bounce than the first.
 
-**What you have seen, you remember.** Any ledge that has been legible stays as
-a fading dashed outline for a few seconds after the fog takes it back, so a
-gust is worth memorising and a route can be run from memory.
+**Seracs.** Ice the size of a house, hanging off the wall. It notices you from
+a long way off, cracks, and lets go. You can see it coming, which is the
+point: it is a route decision, not a reflex test.
 
-Hop into empty fog and you slip, losing two rows and your combo. A hop crosses
-one lane, or two if you leap: further, slower, and a longer way to fall.
+**Icicles** hang under ledges and drop when you pass beneath them. Fast, small,
+and entirely your fault.
 
-**Scoring.** Every ledge pays, combos multiply it, and a hop onto a ledge you
-could neither see nor remember pays a blind bonus. Crystals, cairns and the
-summit add more, and a fast summit earns a time bonus. Guide mode lights the
-route for you and is scored at half. Higher up the gusts come rarer and show
-less, some ledges crumble under you moments after you land, and the whiteout
-climbs faster.
+**The avalanche** climbs the mountain behind you and does not stop. It is not
+really a hazard, it is a clock you can see. Light a cairn and it is shoved back
+down the face. Get too far ahead and it speeds up, so running away perfectly is
+never the answer either. Falling costs you the ground back to your last cairn.
+Being caught by the avalanche costs you the run.
+
+**Brittle ledges** give out about three quarters of a second after you land on
+them. **Ice ledges** are slick and you keep your momentum across them.
+
+## What you carry
+
+**Grip** is the bar under your health. Hanging off a wall drains it, the dash
+and the axe cost a bite of it, and standing on stone fills it back. It is the
+budget everything else is spent from.
+
+**The ice axe** is thrown, bites the first stone it meets, and puts you on a
+rope. Hold the button and it hauls you up; steer and you swing. It is never
+required and it is always faster.
+
+**Cairns** are stacked stones on the wide rest shelves. Stand on one and it
+lights: a checkpoint, a health back, full grip, and the avalanche driven back
+down the mountain.
+
+**Crystals** sit on the ledges off the route - further out, usually higher, and
+worth points and a good chunk of grip.
 
 ## Controls
 
 | Key | Action |
 |---|---|
-| Left / A | Hop up-left |
-| Up / W / Space | Hop straight up |
-| Right / D | Hop up-right |
-| Q / E, or Shift and a direction | Leap two lanes |
-| Z / X / C | Throw the axe up-left / up / up-right |
-| F | Light a flare |
-| Enter | Confirm |
-| Esc or P | Pause |
+| A / D, or arrows | Move |
+| Space / W / Up | Jump - hold for height, release early to clip it |
+| into a wall | Slide; jump to kick off it |
+| Shift / X | Dash, eight-directional, costs grip |
+| C / F / E, or right mouse | Throw the axe; aim with the mouse |
+| Down while on the rope | Pay out rope |
+| Up or Jump while on the rope | Reel in |
+| Esc / P | Pause |
 | M | Mute |
 | R | Restart (while paused) |
-| T | Back to the title (while paused) |
 
-Tap or click the lane you want to hop to.
+A gamepad works: left stick and A to move and jump, B or a trigger to dash,
+X or a shoulder for the axe, right stick to aim.
 
-## The three zones
+## The five zones
 
-| Zone | Altitude | What changes |
+| Zone | Sky | What changes |
 |---|---|---|
-| Treeline | 1800-2780 m | Gusts every 4.5 s showing 7 ledges. Some rows offer two ledges. |
-| The Ridge | 2800-3780 m | Dusk falls. Gusts every 6 s showing 5. Crumbling ledges appear. |
-| The Summit | 3800-4800 m | Aurora night. Gusts every 7.5 s showing only 3, and the wind is heard a second before it clears. |
+| The Icefall | Dawn | Learning ground. Ice falls rarely and the avalanche is a long way down. |
+| The Serac Field | Day | Seracs on the walls, more ice, a faster clock. |
+| The Storm Band | Storm | Lightning, hard wind, and the sky lets go of several blocks at once. |
+| The Knife Ridge | Dusk | The corridor narrows. Brittle ledges everywhere. |
+| The Death Zone | Aurora night | Thin air, thin ledges, and everything at once. |
+
+## How it looks
+
+Everything is drawn at 640x360 and scaled to the window with a sharp filter.
+Under that is a real renderer:
+
+- **Normal-mapped forward lighting.** Every sprite and every slab of the
+  mountain carries a normal map, derived automatically from its own silhouette
+  and painted detail. Your lantern, a lit cairn, a crystal, a flare of ice
+  where a block landed - each is a real light with a position, a radius, a
+  colour and a height off the wall, and each of them shapes the rock.
+- **Lit volumetric mist**, scattering those same lights, which is most of what
+  makes a flat frame look like it has air in it.
+- **Bloom** on a soft knee, so only things that are genuinely emitting glow.
+- **God rays** from the sun, on their own high threshold so it is the sun that
+  streaks and not the whole sky.
+- **Screen-space distortion**: every heavy impact pushes a pressure wave
+  through the picture.
+- **Per-zone colour grading**, cross-faded by altitude, so the mountain goes
+  from dawn through a storm to an aurora without a single cut.
+- Tone mapping, vignette, chromatic aberration, film grain and dithering, all
+  applied at the game's own resolution so the grain is pixels and not fuzz.
+
+Nothing is a bitmap that was drawn somewhere else. The stone, the ice, the
+climber, the wordmark and the range on the horizon are all generated in code at
+boot; the only asset files are the font and the sound.
+
+## How it is built
+
+Plain JavaScript. No libraries, no modules, no bundler, no build step.
+
+```
+src/core     maths and noise, config, input, audio, text, boot
+src/gfx      WebGL2: context, shaders, sprite batcher, lights, camera,
+             the frame graph, and the per-altitude look
+src/art      everything drawn at boot: materials, the climber's rig, props,
+             the wordmark, the range, and the normal-map generator
+src/world    the mountain: route generation, chunk baking, collision
+src/game     the climber, the axe, the ice, the avalanche, the director
+src/fx       particles and weather
+src/ui       the interface
+src/states   title, play, results
+```
+
+The mountain is generated once from a fixed seed, so the route is a place
+rather than a shuffle and a best time means something. It is baked into
+textures a slab at a time as the camera reaches it, and dropped behind you.
+
+`legacy/` holds *Summit in the Fog*, the game this replaced. It still runs.
 
 ## Audio
 
-Every sound is an original effect authored for this game and shipped as a plain
-WAV in `assets/audio/`, played with `HTMLAudioElement`. **No Web Audio API is
-used anywhere in the game.** The effects are generated offline by
-`tools/gen_sfx.js` (run it with Node to rebuild them). They are tuned to stay
-soft and short so they do not wear on you over a long climb. There is no music
-by design, only effects and a quiet wind bed; both have sliders in Settings.
+Every sound is original and generated offline by `tools/gen_sfx.js` (run it
+with Node to rebuild them). They ship as plain WAV files and are played with
+`HTMLAudioElement`. **No Web Audio API is used anywhere in the game.** There is
+no music by design - only effects, a wind bed, and the roar of the thing behind
+you.
 
 ## Credits
 
-Backgrounds are from CraftPix's free "Nature Landscapes" pixel art pack.
-Text uses the free pixel font m5x7 by Daniel Linssen. Everything else, including
-the climber, ledges, cairns, fog and whiteout, is drawn procedurally in code.
 See `CREDITS.md`.
-
-## Technical notes
-
-Plain JavaScript on one HTML5 canvas. No libraries, no modules, no bundler.
-Internal resolution is 576x324, integer-scaled to the window so the pixels stay
-sharp. The mountain is generated from a fixed seed, so every run is the same
-route and your best time means something.

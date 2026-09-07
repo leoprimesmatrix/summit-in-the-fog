@@ -10,17 +10,17 @@
 
   Assets.manifest = {
     // Base camp: the forest you set out from.
-    sky4:    'assets/img/nature_4/1.png',
-    cloud4:  'assets/img/nature_4/2.png',
-    hill4:   'assets/img/nature_4/3.png',
-    tree4:   'assets/img/nature_4/4.png',
-    sky3:    'assets/img/nature_3/1.png',
-    peak3:   'assets/img/nature_3/2.png',
-    haze3:   'assets/img/nature_3/3.png',
-    fore3:   'assets/img/nature_3/4.png',
-    aurora6: 'assets/img/nature_6/1.png',
-    stars6:  'assets/img/nature_6/2.png',
-    peaks6:  'assets/img/nature_6/3.png'
+    sky4:    '../assets/img/nature_4/1.png',
+    cloud4:  '../assets/img/nature_4/2.png',
+    hill4:   '../assets/img/nature_4/3.png',
+    tree4:   '../assets/img/nature_4/4.png',
+    sky3:    '../assets/img/nature_3/1.png',
+    peak3:   '../assets/img/nature_3/2.png',
+    haze3:   '../assets/img/nature_3/3.png',
+    fore3:   '../assets/img/nature_3/4.png',
+    aurora6: '../assets/img/nature_6/1.png',
+    stars6:  '../assets/img/nature_6/2.png',
+    peaks6:  '../assets/img/nature_6/3.png'
   };
 
   Assets.load = function (onDone) {
