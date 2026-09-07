@@ -159,6 +159,9 @@
     IF.setStateNow('title', {});
     booted = true;
     last = 0;
+    // Kick the loop. It re-schedules itself from then on, but somebody has
+    // to throw the first frame.
+    requestAnimationFrame(frame);
   }
 
   // --- loop ----------------------------------------------------------------
