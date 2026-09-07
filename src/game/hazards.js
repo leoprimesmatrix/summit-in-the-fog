@@ -86,7 +86,7 @@
   // --- impacts -------------------------------------------------------------
 
   function shock(x, y, power) {
-    shocks.push({ x: x, y: y, t: 0, dur: 0.42 + power * 0.22, power: power });
+    shocks.push({ x: x, y: y, t: 0, dur: 0.30 + power * 0.16, power: power });
   }
   Hz.shock = shock;
 
@@ -370,9 +370,10 @@
     for (i = 0; i < shocks.length; i++) {
       var s = shocks[i];
       var t2 = s.t / s.dur;
-      var r = 10 + t2 * (58 + s.power * 110);
-      D.ring(Cam.sx(s.x), Cam.sy(s.y), r, 3, '#dff2ff', (1 - t2) * 0.55 * s.power);
-      D.glow(Cam.sx(s.x), Cam.sy(s.y), 26 * s.power * (1 - t2), '#eaf8ff', (1 - t2) * 0.7);
+      var r = 8 + t2 * (26 + s.power * 46);
+      var fade = (1 - t2) * (1 - t2);
+      D.ring(Cam.sx(s.x), Cam.sy(s.y), r, 2, '#dff2ff', fade * 0.30 * s.power);
+      D.glow(Cam.sx(s.x), Cam.sy(s.y), 22 * s.power * (1 - t2), '#eaf8ff', fade * 0.55);
     }
     D.blend('normal');
   };
@@ -386,7 +387,7 @@
     for (var i = 0; i < shocks.length; i++) {
       var s = shocks[i];
       var t = s.t / s.dur;
-      var r = (14 + t * (70 + s.power * 130)) * 0.5;
+      var r = (12 + t * (30 + s.power * 58)) * 0.5;
       D.sprite('warpring', Cam.sx(s.x) * 0.5, Cam.sy(s.y) * 0.5, {
         scale: r / 48, alpha: (1 - t) * (1 - t) * 0.95, lit: 0
       });
