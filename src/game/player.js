@@ -44,6 +44,8 @@
   var deadT = 0;
   var hangT = 0, hangSide = 0, regrab = 0;
   var slipT = 0;            // ice underfoot: friction is suspended
+  var climbing = false;     // going up a wall on grip
+  var climbT = 0;
   var surface = 'rock';
   var jumpHeld = false;
   var enterGroundV = 0;
@@ -337,11 +339,26 @@
       if (wallAt(-1) && ax <= 0) P.onWall = -1;
       else if (wallAt(1) && ax >= 0) P.onWall = 1;
     }
+    climbing = false;
     if (P.onWall) {
       wallCoyote = C.WALL_STICK;
       wallCoyoteSide = P.onWall;
       P.facing = -P.onWall;
-      if (P.vy > 0) {
+      // Climbing. Hold into the wall and up, and you go up it on grip: the
+      // walls stop being things you bounce off and become part of the
+      // route. It is slow and it costs, so it is a way out of trouble and
+      // a way to reach the next lip, not a replacement for jumping.
+      if (ax === P.onWall && ay < 0 && P.grip > 0.02) {
+        climbing = true;
+        P.vy = U.toward(P.vy, -C.CLIMB_V, 1400, dt);
+        P.grip = Math.max(0, P.grip - C.GRIP_DRAIN_CLIMB * dt);
+        climbT += dt;
+        if (climbT > 0.22) {
+          climbT = 0;
+          Aud.playVar('sfx_step', 0.55, 0.2);
+          Pt.powder(P.x + (P.onWall > 0 ? P.w : 0), P.y + P.h * 0.8, 2, 30, 0.3);
+        }
+      } else if (P.vy > 0) {
         // Sliding costs grip; when it runs out you slide at full speed.
         var slideCap = P.grip > 0 ? C.WALL_SLIDE_V : C.FALL_CAP;
         if (P.vy > slideCap) P.vy = U.toward(P.vy, slideCap, 900, dt);
@@ -363,7 +380,9 @@
         P.state = 'air';
         Aud.playVar('sfx_jump', 1, 0.09);
         Pt.powder(P.cx(), P.y + P.h, 6, 46, 0.9);
-      } else if (P.onWall || wallCoyote > 0) {
+      } else if ((P.onWall || wallCoyote > 0) && !climbing) {
+        // Into the wall and up is a climb, not a kick: a kick needs Space,
+        // or a push away from the wall.
         var side = P.onWall || wallCoyoteSide;
         In.consume('jump');
         P.vx = -side * C.WALL_JUMP_VX;
@@ -385,7 +404,7 @@
     }
 
     // --- gravity --------------------------------------------------------
-    if (dashT <= 0) {
+    if (dashT <= 0 && !climbing) {
       var g = C.GRAVITY;
       // Float a little at the top of the arc; it gives the apex weight.
       if (Math.abs(P.vy) < 60) g *= 0.82;
@@ -476,6 +495,7 @@
     else if (dashT > 0) animName = 'c_dash';
     else if (IF.Grapple && IF.Grapple.reeling()) animName = 'c_reel';
     else if (IF.Grapple && IF.Grapple.throwing()) animName = 'c_throwing';
+    else if (climbing) { animName = 'c_wall'; }
     else if (P.onWall) animName = 'c_wall';
     else if (!P.onGround) {
       if (P.vy < -60) animName = 'c_rise';

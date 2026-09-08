@@ -127,7 +127,10 @@
     P.beginSprites(1, s.fog);
     IF.Backdrop.draw(Cam.y, s.haze, s.snow, s.rock, 1, t);
     W.drawSnow(0.55, s.haze, false, true);
+    IF.Backwall.draw(Cam.y, 1, 0.10, s.rock);
+    IF.Backwall.drawShadows(Cam, s.keyDir, 1);
     Sc.terrain(Cam);
+    Sc.dressing(Cam);
 
     // The climber, idling on the start ledge.
     D.useAtlas();
@@ -161,7 +164,7 @@
     P.endSprites();
 
     P.beginWarp(); P.endWarp();
-    P.present(Sc.grade(Cam, { fade: IF.fade(), vignette: 0.62, bloomI: s.bloom * 1.15 }));
+    P.present(Sc.grade(Cam, { fade: IF.fade(), vignette: 0.48, bloomI: s.bloom * 1.15 }));
   };
 
   // --- pieces --------------------------------------------------------------
@@ -174,8 +177,9 @@
     // A scrim over the lower half. Without it the interface competes with a
     // snowfield for the same values and loses. Two overlapping gradients
     // rather than a gradient and a bar, so there is no edge to see.
-    D.vgrad(0, C.H - 240, C.W, 240, [0.02, 0.04, 0.09], 0.62 * ease, true);
-    D.vgrad(0, C.H - 120, C.W, 120, [0.02, 0.04, 0.09], 0.55 * ease, true);
+    D.vgrad(0, 0, C.W, 150, [0.02, 0.04, 0.09], 0.70 * ease, false);
+    D.vgrad(0, C.H - 200, C.W, 200, [0.02, 0.04, 0.09], 0.72 * ease, true);
+    D.vgrad(0, C.H - 100, C.W, 100, [0.02, 0.04, 0.09], 0.60 * ease, true);
 
     // Wordmark. Drawn unlit and on its own dark bed, because a pale ice
     // wordmark against a pale sky is a wordmark nobody can read.
@@ -190,8 +194,11 @@
     D.glow(lx, ly, 150, '#7fd4ff', 0.13 * ease);
     D.blend('normal');
 
-    F.text('CLIMB A MOUNTAIN THAT IS TRYING TO FALL ON YOU', lx, ly + 54, {
-      align: 'center', scale: 1, color: '#bcd6ea', alpha: ease * 0.95, shadow: 1
+    var tag = 'CLIMB A MOUNTAIN THAT IS TRYING TO FALL ON YOU';
+    var tw = F.width(tag, 1);
+    D.panel(lx - tw / 2 - 10, ly + 44, tw + 20, 16, 0.55 * ease);
+    F.text(tag, lx, ly + 55, {
+      align: 'center', scale: 1, color: '#cfe4f4', alpha: ease, shadow: 1
     });
 
     itemBoxes.length = 0;
@@ -204,20 +211,21 @@
 
       itemBoxes.push({ x: lx - w / 2 - 16, y: y - 15, w: w + 32, h: 22 });
 
+      D.panel(lx - 110, y - 15, 220, 22, (on ? 0.80 : 0.42) * ease);
       if (on) {
-        D.panel(lx - w / 2 - 14, y - 15, w + 28, 22, 0.55 * ease);
+        D.rect(lx - 110, y - 15, 3, 22, '#7fd4ff', ease);
         D.blend('add');
         D.glow(lx, y - 5, 70 + pulse * 10, '#8fd8ff', (0.10 + pulse * 0.05) * ease);
         D.blend('normal');
-        D.sprite('chevron', lx - w / 2 - 22, y - 5, {
+        D.sprite('chevron', lx - w / 2 - 18, y - 5, {
           rot: -Math.PI / 2, scale: 0.8, color: '#9fe4ff',
           alpha: ease * (0.7 + pulse * 0.3), lit: 0
         });
       }
       F.text(items[i].label, lx, y, {
         align: 'center', scale: 2, shadow: 1,
-        color: on ? '#eafaff' : '#8ba4bd',
-        alpha: ease * (on ? 1 : 0.85)
+        color: on ? '#ffffff' : '#a9bfd3',
+        alpha: ease * (on ? 1 : 0.92)
       });
     }
 
@@ -229,17 +237,17 @@
       if (b.time > 0) line += '   ' + U.time(b.time);
       if (b.alt > 0) line += '   ' + Math.round(b.alt) + ' M';
       var bw = F.width(line, 1);
-      D.panel(C.W / 2 - bw / 2 - 8, ry - 12, bw + 16, 17, 0.5 * ease);
+      D.panel(C.W / 2 - bw / 2 - 10, ry - 12, bw + 20, 17, 0.7 * ease);
       F.text(line, C.W / 2, ry, {
-        align: 'center', color: '#9fd8ff', alpha: ease * 0.95, shadow: 1
+        align: 'center', color: '#bfe6ff', alpha: ease, shadow: 1
       });
     }
 
     F.text('MICRO JAM 064', C.W - 8, C.H - 6, {
-      align: 'right', color: '#4d6580', alpha: ease * 0.9
+      align: 'right', color: '#7f97b0', alpha: ease, shadow: 1
     });
     F.text(IF.Audio.muted() ? 'M  SOUND OFF' : 'M  SOUND ON', 8, C.H - 7, {
-      color: '#4d6580', alpha: ease * 0.9
+      color: '#7f97b0', alpha: ease, shadow: 1
     });
   }
 
@@ -247,7 +255,8 @@
     ['MOVE', 'A D  or  ARROWS'],
     ['JUMP', 'SPACE  or  W'],
     ['', 'hold for height, let go early to clip it'],
-    ['WALL', 'press into a wall to slide, jump to kick off'],
+    ['WALL', 'push into a wall to slide. SPACE kicks off it'],
+    ['CLIMB', 'push into a wall and hold UP to go up it, on grip'],
     ['DASH', 'SHIFT  or  X    costs grip'],
     ['AXE', 'C  or  F, or right mouse   aim with the mouse'],
     ['', 'it bites rock, hauls you in, and swings'],
@@ -260,7 +269,7 @@
 
   function drawHelp() {
     var x = 62, y = 44, w = C.W - 124;
-    D.panel(x - 12, y - 22, w + 24, 268, 0.86);
+    D.panel(x - 12, y - 22, w + 24, 286, 0.92);
     F.text('HOW TO CLIMB', C.W / 2, y, { align: 'center', scale: 2, color: '#eafaff', shadow: 1 });
     D.blend('add');
     D.glow(C.W / 2, y - 6, 120, '#8fd8ff', 0.10);
@@ -271,13 +280,13 @@
       var key = HELP[i][0], val = HELP[i][1];
       if (key) {
         F.text(key, x, ly, { color: '#7fd4ff', shadow: 1 });
-        F.text(val, x + 62, ly, { color: '#d3e3f2', shadow: 1 });
+        F.text(val, x + 62, ly, { color: '#eaf4fb', shadow: 1 });
       } else {
-        F.text(val, x + 62, ly, { color: '#8ba4bd', alpha: 0.9, shadow: 1 });
+        F.text(val, x + 62, ly, { color: '#a9bfd3', shadow: 1 });
       }
       ly += 17;
     }
-    F.text('ESC  BACK', C.W / 2, y + 258, { align: 'center', color: '#6f8aa4', shadow: 1 });
+    F.text('ESC  BACK', C.W / 2, y + 258, { align: 'center', color: '#9fb6cc', shadow: 1 });
   }
 
   IF.registerState('title', St);

@@ -37,6 +37,7 @@
   var height = new Float32Array(W * H);
   var gloss = new Float32Array(W * H);
   var expose = new Float32Array(W * H);
+  var shade = new Float32Array(W * H);
 
   var albedoCtx = null, normalCtx = null;
   var albedoImg = null, normalImg = null;
@@ -122,6 +123,36 @@
     }
   }
 
+  // Cast shadow from the zone's key light. For every solid pixel near an
+  // edge, march toward the light; if the march leaves the stone and then
+  // meets stone again, something is standing between this pixel and the
+  // sun. Soft with distance, so a ledge throws a shadow onto the wall under
+  // it that fades as it falls. It is the cheapest thing that makes a slab
+  // read as attached to the mountain rather than pasted on it.
+  function castShadow(keyDir) {
+    var S = 26;
+    var dx = keyDir[0], dy = keyDir[1];
+    var len = Math.sqrt(dx * dx + dy * dy) || 1;
+    dx /= len; dy /= len;
+    for (var y = 0; y < H; y++) {
+      for (var x = 0; x < W; x++) {
+        var i = y * W + x;
+        shade[i] = 0;
+        if (!mask[i]) continue;
+        // Deep inside the mass the march never sees air; skip it.
+        if (df[i] > S) continue;
+        var air = false;
+        for (var k = 2; k <= S; k++) {
+          var px = Math.round(x + dx * k), py = Math.round(y + dy * k);
+          if (px < 0 || px >= W || py < 0 || py >= H) break;
+          var m = mask[py * W + px];
+          if (!m) { air = true; continue; }
+          if (air) { shade[i] = 1 - k / S; break; }
+        }
+      }
+    }
+  }
+
   // --- the bake ------------------------------------------------------------
 
   // Which materials this altitude is made of, and how much snow sticks.
@@ -152,6 +183,7 @@
     T.rasterize(mask, W, H, yTop);
     distanceField();
     exposure();
+    castShadow(C.zoneAt(yTop + H * 0.5).keyDir);
     // The occlusion term wants the mask smoothed a long way, so the middle of
     // a big slab sits back from its edges.
     boxBlur(mask, occ, occTmp, 7);
@@ -218,7 +250,9 @@
         // Occlusion: the interior of the mass sits back a little from its
         // own edges, so a big slab is not a flat cutout.
         var ao = 1 - U.clamp01((occ[i] - 0.55) / 0.45) * 0.30;
-        r *= ao; g *= ao; b *= ao;
+        // The cast shadow is cool, not black: it is lit by sky.
+        var sh = shade[i] * 0.55;
+        r *= ao * (1 - sh); g *= ao * (1 - sh * 0.96); b *= ao * (1 - sh * 0.80);
 
         ad[p] = r; ad[p + 1] = g; ad[p + 2] = b; ad[p + 3] = 255;
 

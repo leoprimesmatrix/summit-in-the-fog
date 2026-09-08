@@ -30,25 +30,31 @@
 
     // --- the climber -------------------------------------------------------
     P_W: 11, P_H: 20,         // collision box; the sprite overhangs it
-    GRAVITY: 1000,
-    FALL_CAP: 620,
-    RUN_SPEED: 150,
-    RUN_ACCEL: 1500,
-    RUN_FRICTION: 1900,
-    AIR_ACCEL: 820,
-    AIR_DRAG: 240,
-    JUMP_V: 320,              // straight up: 51px, comfortably over a 44px step
+    // The arc is tuned for snap, not float: the same 51px of height as
+    // before, reached in 0.28s instead of 0.32s and coming down faster. A
+    // floaty jump is what made the climb feel like a weak platformer; the
+    // route generator and its audit read these numbers, so the mountain is
+    // regenerated to match whenever they change.
+    GRAVITY: 1350,
+    FALL_CAP: 700,
+    RUN_SPEED: 164,
+    RUN_ACCEL: 1900,
+    RUN_FRICTION: 2300,
+    AIR_ACCEL: 1050,
+    AIR_DRAG: 260,
+    JUMP_V: 372,              // straight up: 51px, comfortably over a 44px step
     JUMP_CUT: 0.42,           // releasing jump early keeps this much of the rise
     COYOTE: 0.10,
     JUMP_BUFFER: 0.12,
     WALL_SLIDE_V: 74,
-    WALL_JUMP_VX: 168,
-    WALL_JUMP_VY: 300,
+    WALL_JUMP_VX: 178,
+    WALL_JUMP_VY: 348,
+    CLIMB_V: 66,              // hold up against a wall to go up it, on grip
     WALL_STICK: 0.14,         // grace where a wall jump still counts after leaving
     WALL_LOCK: 0.16,          // no steering back into the wall for this long
-    DASH_SPEED: 400,
+    DASH_SPEED: 440,
     DASH_TIME: 0.15,
-    DASH_END_V: 168,
+    DASH_END_V: 176,
     DASH_COOLDOWN: 0.30,
     DASH_GRIP: 0.20,          // fraction of the grip bar a dash costs
     LEDGE_GRAB_REACH: 6,
@@ -69,6 +75,7 @@
     GRIP_REGEN_GROUND: 0.62,
     GRIP_REGEN_AIR: 0.10,
     GRIP_DRAIN_WALL: 0.24,
+    GRIP_DRAIN_CLIMB: 0.50,
     GRIP_DRAIN_HANG: 0.20,
 
     // --- damage ------------------------------------------------------------

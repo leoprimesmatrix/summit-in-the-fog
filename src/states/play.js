@@ -20,6 +20,7 @@
   var pauseMode = 'menu';
   var intro = 0;
   var hitFlash = 0;
+  var hitstop = 0;
   var lastHealth = 0;
   var PAUSE_ITEMS = ['RESUME', 'SETTINGS', 'RESTART', 'LEAVE THE MOUNTAIN'];
 
@@ -31,7 +32,7 @@
     Pipe = IF.Pipeline; Lights = IF.Lights;
 
     t = 0; paused = false; pauseSel = 0; pauseMode = 'menu';
-    intro = 0; hitFlash = 0;
+    intro = 0; hitFlash = 0; hitstop = 0;
 
     var T = IF.Terrain;
     var sy = T.startY();
@@ -75,6 +76,17 @@
 
     if (paused) { updatePause(dt); return; }
 
+    // Hitstop: the world holds for a few frames when you are hit, so the hit
+    // has weight. The camera and the snow keep going, which is what makes it
+    // read as impact rather than as a stall.
+    if (hitstop > 0) {
+      hitstop -= dt;
+      Cam.update(dt);
+      Pt.update(dt * 0.25, 0);
+      Hud.update(dt, Run, P, Av);
+      return;
+    }
+
     var allow = !transitioning && !Run.over && !Run.respawning();
 
     // The avalanche waits until you have actually started climbing.
@@ -103,7 +115,7 @@
     if (!Run.over) Dir.update(dt, P, zone, C.progressAt(P.cy()));
     Run.update(dt);
 
-    if (P.health < lastHealth) { hitFlash = 1; Dir.onPlayerHurt(); }
+    if (P.health < lastHealth) { hitFlash = 1; hitstop = 0.085; Dir.onPlayerHurt(); }
     lastHealth = P.health;
 
     Pt.update(dt, Wx.wind() * 0.5);
@@ -166,7 +178,10 @@
     Pipe.beginSprites(1, s.fog);
     IF.Backdrop.draw(Cam.y, s.haze, s.snow, s.rock, 1, t);
     Wx.drawSnow(0.5 + s.snowfall * 0.4, s.haze, false, true);
+    IF.Backwall.draw(Cam.y, 1, 0.10 + s.snowfall * 0.08, s.rock);
+    IF.Backwall.drawShadows(Cam, s.keyDir, 1);
     Sc.terrain(Cam);
+    Sc.dressing(Cam);
     Wp.draw();
     Hz.draw();
     Av.draw();
@@ -176,7 +191,7 @@
     Pipe.endSprites();
 
     // --- air ------------------------------------------------------------
-    var mist = 0.13 + s.snowfall * 0.22 + Av.roar() * 0.32;
+    var mist = 0.08 + s.snowfall * 0.16 + Av.roar() * 0.32;
     Sc.mist(Cam.y, t, mist, C.H * 0.72, C.H * 0.85);
 
     // --- light pass -----------------------------------------------------
@@ -212,11 +227,11 @@
       rot: Cam.rot,
       warpAmt: Hz.hasWarp() ? 0.03 : 0,
       desat: U.clamp01((1 - P.health / C.HEALTH) * 0.30 + (P.dead ? Run.endTime() * 0.5 : 0)),
-      vignette: 0.5 + Av.roar() * 0.25 + (1 - P.health / C.HEALTH) * 0.18,
+      vignette: 0.40 + Av.roar() * 0.25 + (1 - P.health / C.HEALTH) * 0.16,
       flash: Math.max(hitFlash * 0.28, Wx.flash() * 0.30),
       flashCol: hitFlash > Wx.flash() ? [1, 0.45, 0.35] : [0.72, 0.82, 1],
       exposure: 1 + Wx.flash() * 0.18,
-      aberration: 0.45 + hitFlash * 1.6 + Cam.trauma() * 1.2
+      aberration: 0.16 + hitFlash * 1.4 + Cam.trauma() * 0.9
     };
     if (paused) { extra.desat = 0.55; extra.vignette = 0.78; extra.exposure = 0.72; }
     Pipe.present(Sc.grade(Cam, extra));
@@ -241,7 +256,7 @@
         });
       }
       F.text(PAUSE_ITEMS[i], C.W / 2, iy, {
-        align: 'center', color: on ? '#eafaff' : '#8ba4bd', shadow: 1
+        align: 'center', color: on ? '#ffffff' : '#a9bfd3', shadow: 1
       });
     }
     F.text(Math.round(C.altitudeAt(P.cy())) + ' M    ' + U.time(Run.time) +

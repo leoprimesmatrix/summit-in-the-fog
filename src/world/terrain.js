@@ -625,6 +625,7 @@
     buildProfile(seed);
     buildRoute(seed);
     index();
+    if (IF.Scene && IF.Scene.resetDressing) IF.Scene.resetDressing();
     return T;
   };
 

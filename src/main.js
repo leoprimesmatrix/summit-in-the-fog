@@ -104,10 +104,12 @@
       ['Setting type', function () { IF.Font.build('m5x7'); }],
       ['Carving the title', function () { IF.LogoArt.build(); }],
       ['Painting the range', function () { IF.Backdrop.build(); }],
+      ['Raising the far wall', function () { IF.Backwall.build(); }],
       ['Uploading', function () {
         IF.Atlas.upload(IF.GL);
         IF.Draw.init();
         IF.Backdrop.upload(IF.GL);
+        IF.Backwall.upload(IF.GL);
       }],
       ['Growing the mountain', function () { IF.Terrain.generate(C.SEED); }],
       ['Warming the face', function () {

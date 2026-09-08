@@ -170,6 +170,46 @@
     }
   };
 
+  // What is lying about on the two flat places: rock spilled across the
+  // boulder field you start in, and a few blocks on the summit. Fixed, so
+  // they are landmarks, and half-sunk, so they are part of the ground and
+  // not things sitting on it.
+  var DRESS = null;
+  function dressing() {
+    if (DRESS) return DRESS;
+    var T = IF.Terrain;
+    var rng = U.rng(9091);
+    DRESS = [];
+    var sy = T.startY();
+    var xs = [72, 138, 214, 290, 372, 448, 522, 588];
+    for (var i = 0; i < xs.length; i++) {
+      DRESS.push({ x: xs[i] + (rng() - 0.5) * 22, y: sy + 5 + rng() * 6,
+                   v: (rng() * 3) | 0, s: 0.7 + rng() * 0.9, flip: rng() < 0.5 });
+    }
+    var top = null;
+    for (i = 0; i < T.platforms.length; i++) if (T.platforms[i].tag === 'summit') top = T.platforms[i];
+    if (top) {
+      DRESS.push({ x: top.x + top.w * 0.30, y: top.y + 6, v: 1, s: 0.8, flip: false });
+      DRESS.push({ x: top.x + top.w * 0.42, y: top.y + 4, v: 2, s: 0.55, flip: true });
+    }
+    return DRESS;
+  }
+  Sc.resetDressing = function () { DRESS = null; };
+
+  Sc.dressing = function (Cam) {
+    var D = IF.Draw;
+    var list = dressing();
+    D.useAtlas();
+    D.blend('normal');
+    for (var i = 0; i < list.length; i++) {
+      var o = list[i];
+      if (!Cam.visible(o.y, 60)) continue;
+      D.sprite('rockball_' + o.v, Cam.sx(o.x), Cam.sy(o.y), {
+        scale: o.s, flipX: o.flip, lit: 1, normal: 0.6, ox: 20, oy: 26
+      });
+    }
+  };
+
   Sc.mist = function (camY, time, density, bandY, bandH) {
     IF.Pipeline.mist({
       time: time, scroll: camY,
@@ -189,7 +229,7 @@
     raysI: 0, rayCol: [1, 1, 1], rayDensity: 0.62, rayDecay: 0.945, rayWeight: 0.9,
     rayThreshold: 1.25,
     lift: [0, 0, 0], gain: [1, 1, 1], sat: 1, contrast: 1, exposure: 1,
-    vignette: 0.55, grain: 0.035, aberration: 0.55,
+    vignette: 0.42, grain: 0.024, aberration: 0.16,
     flash: 0, flashCol: [1, 1, 1], fade: 1, warpAmt: 0, desat: 0,
     zoom: 1, rot: 0, time: 0, sunUVx: 0.5, sunUVy: 0.5
   };
@@ -203,7 +243,7 @@
     grade.gain = cur.gain;
     grade.sat = cur.sat;
     grade.contrast = cur.contrast;
-    grade.grain = cur.grain;
+    grade.grain = cur.grain * 0.62;
     // The sun's position in UV, with y flipped because the ray pass works in
     // texture space.
     grade.sunUVx = cur.sunX / C.W;
@@ -211,8 +251,8 @@
     grade.zoom = Cam.zoom;
     grade.rot = Cam.rot;
     grade.exposure = 1;
-    grade.vignette = 0.55;
-    grade.aberration = 0.45;
+    grade.vignette = 0.42;
+    grade.aberration = 0.16;
     grade.bloomThreshold = 0.88;
     grade.bloomKnee = 0.20;
     grade.rayThreshold = 1.25;

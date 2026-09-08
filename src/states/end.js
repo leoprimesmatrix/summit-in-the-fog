@@ -85,7 +85,10 @@
     Pipe.beginSprites(1, s.fog);
     IF.Backdrop.draw(Cam.y, s.haze, s.snow, s.rock, 1, t);
     Wx.drawSnow(0.5, s.haze, false, true);
+    IF.Backwall.draw(Cam.y, 1, 0.10, s.rock);
+    IF.Backwall.drawShadows(Cam, s.keyDir, 1);
     Sc.terrain(Cam);
+    Sc.dressing(Cam);
     IF.WorldProps.draw();
     IF.Avalanche.draw();
     IF.Player.draw();
@@ -107,7 +110,7 @@
 
     Pipe.beginWarp(); Pipe.endWarp();
     Pipe.present(Sc.grade(Cam, {
-      fade: alpha, vignette: 0.72, desat: r.won ? 0 : 0.24,
+      fade: alpha, vignette: 0.55, desat: r.won ? 0 : 0.24,
       exposure: r.won ? 1.05 : 0.9
     }));
   };
@@ -175,14 +178,14 @@
       var iw = F.width(ITEMS[i2], 1) + 42;
       var on = i2 === sel;
       boxes.push({ x: bx, y: by - 13, w: iw, h: 20 });
+      D.panel(bx, by - 13, iw, 19, (on ? 0.85 : 0.45) * ba);
       if (on && ba > 0) {
-        D.panel(bx, by - 13, iw, 19, 0.6 * ba);
         D.blend('add');
         D.glow(bx + iw / 2, by - 4, 44, '#8fd8ff', 0.10 * ba);
         D.blend('normal');
       }
       F.text(ITEMS[i2], bx + iw / 2, by, {
-        align: 'center', color: on ? '#eafaff' : '#8ba4bd', shadow: 1, alpha: ba
+        align: 'center', color: on ? '#ffffff' : '#a9bfd3', shadow: 1, alpha: ba
       });
       bx += iw;
     }

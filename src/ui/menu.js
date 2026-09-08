@@ -146,7 +146,7 @@
   M.card = function (x, y, w, h, title, alpha) {
     var D = IF.Draw, F = IF.Font;
     alpha = alpha === undefined ? 1 : alpha;
-    D.panel(x, y, w, h, 0.88 * alpha);
+    D.panel(x, y, w, h, 0.94 * alpha);
     if (title) {
       D.blend('add');
       D.glow(x + w / 2, y + 14, w * 0.42, '#8fd8ff', 0.09 * alpha);
@@ -162,7 +162,7 @@
   // A label/value row with the value right-aligned. Used on the results card.
   M.row = function (x, w, y, label, value, alpha, hi) {
     var F = IF.Font;
-    F.text(label, x, y, { color: hi ? '#cfe6f7' : '#8ba4bd', alpha: alpha, shadow: 1 });
+    F.text(label, x, y, { color: hi ? '#cfe6f7' : '#a9bfd3', alpha: alpha, shadow: 1 });
     F.text(value, x + w, y, {
       align: 'right', color: hi ? '#ffd48a' : '#eafaff', alpha: alpha, shadow: 1
     });

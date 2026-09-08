@@ -40,6 +40,7 @@
     D.blend('normal');
 
     drawVitals(player, alpha);
+    drawTrack(player, avalanche, alpha);
     drawAltitude(player, alpha);
     drawScore(run, alpha);
     drawAvalanche(avalanche, player, alpha);
@@ -53,7 +54,7 @@
   function drawVitals(player, alpha) {
     var x = 10, y = 10;
     var w = 12 + C.HEALTH * 13 + 4;
-    D.panel(x - 4, y - 4, w, 32, 0.55 * alpha);
+    D.panel(x - 4, y - 4, w, 32, 0.70 * alpha);
 
     for (var i = 0; i < C.HEALTH; i++) {
       var on = i < player.health;
@@ -82,19 +83,68 @@
     if (g > 0.02) D.rect(gx + gw * g - 1, gy - 1, 2, 5, '#eafaff', alpha * 0.9);
   }
 
-  // --- altitude ------------------------------------------------------------
+  // --- the climb track -----------------------------------------------------
+  //
+  // The whole mountain, down the right edge: the five zones as bands, the
+  // summit at the top, you as a bright mark, the avalanche as a red one
+  // rising underneath. The old altimeter was a number, and a number does not
+  // tell you that the thing behind you is gaining. This does, at a glance,
+  // and it is also what turns a climb into a race.
 
   function drawAltitude(player, alpha) {
     var txt = Math.round(altShown) + ' M';
     var w = F.width(txt, 2);
-    var x = C.W - 12, y = 24;
-    D.panel(x - w - 10, 6, w + 16, 40, 0.62 * alpha);
+    var x = C.W - 22, y = 24;
+    D.panel(x - w - 12, 6, w + 20, 24, 0.70 * alpha);
     F.text(txt, x - 2, y, {
       align: 'right', scale: 2, color: '#eafaff', shadow: 1, alpha: alpha
     });
-    D.sprite('mark', x - w - 2, y - 6, {
-      lit: 1, normal: 0.5, scale: 0.8, alpha: alpha * 0.9
-    });
+  }
+
+  function zoneTint(z) {
+    var sky = IF.Scene.SKY[z.sky];
+    return sky ? U.rgb(sky.mid) : [0.5, 0.6, 0.7];
+  }
+
+  function drawTrack(player, av, alpha) {
+    var x = C.W - 9, top = 40, bot = C.H - 26;
+    var h = bot - top;
+    D.panel(x - 6, top - 8, 12, h + 16, 0.55 * alpha);
+    D.rect(x - 1, top, 3, h, '#0b121c', 0.9 * alpha);
+
+    // Zone bands, faint, so the track reads as the mountain and not a gauge.
+    for (var i = 0; i < C.ZONES.length; i++) {
+      var z = C.ZONES[i];
+      var y0 = bot - z.to * h, y1 = bot - z.from * h;
+      var c = zoneTint(z);
+      D.rect(x - 1, y0, 3, y1 - y0, c, 0.42 * alpha);
+      if (i > 0) D.rect(x - 3, y1, 7, 1, '#eafaff', 0.18 * alpha);
+    }
+
+    // The avalanche, climbing the track under you.
+    if (av.active()) {
+      var ap = U.clamp01(C.progressAt(av.y()));
+      var ay = bot - ap * h;
+      var gap = av.distanceTo(player.cy());
+      var danger = U.clamp01(1 - gap / 700);
+      var col = danger > 0.72 ? [1, 0.35, 0.28] : (danger > 0.42 ? [1, 0.72, 0.3] : [0.85, 0.5, 0.45]);
+      D.rect(x - 1, ay, 3, bot - ay, col, (0.45 + danger * 0.5) * alpha);
+      D.blend('add');
+      D.glow(x, ay, 9 + danger * 10, col, (0.25 + danger * 0.45) * alpha, true);
+      D.blend('normal');
+      D.rect(x - 4, ay, 9, 1, col, alpha);
+    }
+
+    // You.
+    var pp = U.clamp01(C.progressAt(player.cy()));
+    var py = bot - pp * h;
+    D.blend('add');
+    D.glow(x, py, 8, '#9fe4ff', 0.35 * alpha, true);
+    D.blend('normal');
+    D.sprite('pip', x, py, { lit: 0, scale: 0.8, alpha: alpha });
+
+    // The summit.
+    D.sprite('mark', x, top - 2, { lit: 0, scale: 0.8, alpha: alpha * 0.95 });
   }
 
   // --- score ---------------------------------------------------------------
@@ -102,7 +152,7 @@
   function drawScore(run, alpha) {
     var txt = U.commas(scoreShown);
     var w = F.width(txt, 1);
-    var x = C.W - 12, y = 40;
+    var x = C.W - 24, y = 42;
     F.text(txt, x, y, { align: 'right', color: '#9fd8ff', shadow: 1, alpha: alpha });
 
     if (run.combo > 1) {
@@ -122,30 +172,18 @@
     if (!av.active()) return;
     var gap = av.distanceTo(player.cy());
     var danger = U.clamp01(1 - gap / 700);
-    if (danger <= 0.02) return;
-
-    // A bar down the right edge: how much mountain is left between you and it.
-    var bx = C.W - 6, by = 62, bh = C.H - 130;
-    D.rect(bx, by, 2, bh, '#111a26', 0.6 * alpha);
-    var fill = bh * danger;
-    var col = danger > 0.72 ? [1, 0.35, 0.28] : (danger > 0.42 ? [1, 0.72, 0.3] : [0.6, 0.78, 0.92]);
-    D.rect(bx, by + bh - fill, 2, fill, col, alpha * (0.7 + danger * 0.3));
-
-    if (danger > 0.55) {
-      var pulse = 0.5 + 0.5 * Math.sin(warnPulse * 2.4);
-      var a = alpha * (danger - 0.55) / 0.45 * (0.45 + pulse * 0.55);
-      D.blend('add');
-      D.glow(bx + 1, by + bh - fill, 26, col, a * 0.5);
-      D.blend('normal');
-      var txt = 'AVALANCHE';
-      var w = F.width(txt, 1);
-      D.panel(C.W / 2 - w / 2 - 8, C.H - 46, w + 16, 16, 0.5 * a);
-      F.text(txt, C.W / 2, C.H - 34, {
-        align: 'center', color: col, shadow: 1, alpha: a
-      });
-      // The screen edge nearest the danger reddens.
-      D.vgrad(0, C.H - 60, C.W, 60, col, a * 0.14, true);
-    }
+    if (danger <= 0.55) return;
+    var col = danger > 0.72 ? [1, 0.35, 0.28] : [1, 0.72, 0.3];
+    var pulse = 0.5 + 0.5 * Math.sin(warnPulse * 2.4);
+    var a = alpha * (danger - 0.55) / 0.45 * (0.45 + pulse * 0.55);
+    var txt = 'AVALANCHE';
+    var w = F.width(txt, 2);
+    D.panel(C.W / 2 - w / 2 - 12, C.H - 52, w + 24, 22, 0.7 * a);
+    F.text(txt, C.W / 2, C.H - 36, {
+      align: 'center', scale: 2, color: col, shadow: 1, alpha: a
+    });
+    // The bottom of the frame reddens.
+    D.vgrad(0, C.H - 70, C.W, 70, col, a * 0.16, true);
   }
 
   // --- floating numbers ----------------------------------------------------
