@@ -16,7 +16,11 @@
     // World x runs 0..W. The camera only travels vertically, so the whole
     // frame is always face. World y increases downward, screen-style: the
     // summit is y 0 and the boulder field you start in is y WORLD_H.
-    WORLD_H: 15600,
+    // A perfect climb of the route the generator builds runs at about 58
+    // pixels a second. At the old height that was four and a half minutes of
+    // flawless play before anyone saw the summit, and a real climb was three
+    // times that with an avalanche underneath it the whole way.
+    WORLD_H: 11700,
     CHUNK_H: 390,             // terrain is generated and baked in slabs
     CELL: 4,                  // collision grid resolution in pixels
     CHUNK_CACHE: 7,           // baked slabs kept resident
@@ -86,7 +90,9 @@
     AVALANCHE_START: 1600,    // pixels below the start point
     AVALANCHE_LEAD_MIN: 190,  // it will never be closer than this after a cairn
     AVALANCHE_CATCHUP_GAP: 900,
-    AVALANCHE_CATCHUP_MULT: 1.85,
+    // The catch-up has to stay under what a good climber can do, or the
+    // mountain is a treadmill nobody can win: 34 x 1.5 is 51 against 58.
+    AVALANCHE_CATCHUP_MULT: 1.50,
     CAIRN_PUSHBACK: 560,
 
     // --- camera ------------------------------------------------------------
@@ -114,7 +120,7 @@
         bloom: 0.55, rays: 0.55, grain: 0.035,
         snow: 0.35, wind: 12, windVar: 8,
         boulderRate: 5.2, seracRate: 0.30, icicleRate: 0.55,
-        avalanche: 14, difficulty: 0.0
+        avalanche: 11, difficulty: 0.0
       },
       {
         name: 'THE SERAC FIELD', short: 'SERACS',
@@ -127,7 +133,7 @@
         bloom: 0.65, rays: 0.85, grain: 0.03,
         snow: 0.55, wind: 20, windVar: 14,
         boulderRate: 3.6, seracRate: 0.85, icicleRate: 0.75,
-        avalanche: 21, difficulty: 0.25
+        avalanche: 16, difficulty: 0.25
       },
       {
         name: 'THE STORM BAND', short: 'STORM',
@@ -140,7 +146,7 @@
         bloom: 0.45, rays: 0.15, grain: 0.055,
         snow: 1.00, wind: 46, windVar: 34,
         boulderRate: 2.8, seracRate: 1.05, icicleRate: 1.00,
-        avalanche: 27, difficulty: 0.5, lightning: true
+        avalanche: 22, difficulty: 0.5, lightning: true
       },
       {
         name: 'THE KNIFE RIDGE', short: 'RIDGE',
@@ -153,7 +159,7 @@
         bloom: 0.85, rays: 0.95, grain: 0.04,
         snow: 0.70, wind: 38, windVar: 26,
         boulderRate: 2.3, seracRate: 1.15, icicleRate: 1.15,
-        avalanche: 33, difficulty: 0.75
+        avalanche: 28, difficulty: 0.75
       },
       {
         name: 'THE DEATH ZONE', short: 'SUMMIT',
@@ -166,7 +172,7 @@
         bloom: 1.00, rays: 0.35, grain: 0.045,
         snow: 0.85, wind: 30, windVar: 22,
         boulderRate: 2.0, seracRate: 1.25, icicleRate: 1.25,
-        avalanche: 39, difficulty: 1.0, aurora: true
+        avalanche: 34, difficulty: 1.0, aurora: true
       }
     ],
 

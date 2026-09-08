@@ -21,42 +21,55 @@
   var bank = {};
   var beds = {};
   var muted = false;
-  var sfxVol = 0.75;
-  var bedVol = 0.55;
+  var sfxVol = 0.62;
+  var bedVol = 0.38;
   var unlocked = false;
   var now = 0;
 
+  // The mix.
+  //
+  // These are not taste, they are arithmetic: each level is a target loudness
+  // divided by the measured peak of that WAV, so a file that was authored hot
+  // does not arrive louder than one that was not. The first pass set them by
+  // ear against the waveforms rather than against each other, and the result
+  // was a game where a serac letting go clipped your speakers.
   var SFX = {
-    sfx_jump:     { gap: 0.04, vol: 0.40 },
-    sfx_land:     { gap: 0.05, vol: 0.45 },
-    sfx_land_hard:{ gap: 0.08, vol: 0.70 },
-    sfx_step:     { gap: 0.10, vol: 0.20 },
-    sfx_dash:     { gap: 0.08, vol: 0.55 },
-    sfx_wall:     { gap: 0.06, vol: 0.42 },
-    sfx_axe:      { gap: 0.05, vol: 0.50 },
-    sfx_axe_hit:  { gap: 0.04, vol: 0.60 },
-    sfx_reel:     { gap: 0.20, vol: 0.34 },
-    sfx_crystal:  { gap: 0.05, vol: 0.62 },
-    sfx_cairn:    { gap: 0.20, vol: 0.75 },
-    sfx_crack:    { gap: 0.10, vol: 0.55 },
-    sfx_rumble:   { gap: 0.18, vol: 0.70 },
-    sfx_shatter:  { gap: 0.05, vol: 0.65 },
-    sfx_brittle:  { gap: 0.08, vol: 0.50 },
-    sfx_serac:    { gap: 0.35, vol: 0.85 },
-    sfx_hurt:     { gap: 0.15, vol: 0.75 },
-    sfx_death:    { gap: 0.50, vol: 0.85 },
-    sfx_summit:   { gap: 1.00, vol: 0.90 },
-    sfx_gust:     { gap: 0.40, vol: 0.55 },
-    sfx_ui:       { gap: 0.04, vol: 0.40 },
-    sfx_ui_hi:    { gap: 0.04, vol: 0.45 },
-    sfx_thunder:  { gap: 0.80, vol: 0.80 }
+    sfx_jump:     { gap: 0.04, vol: 0.23 },
+    sfx_land:     { gap: 0.05, vol: 0.21 },
+    sfx_land_hard:{ gap: 0.08, vol: 0.26 },
+    sfx_step:     { gap: 0.10, vol: 0.15 },
+    sfx_dash:     { gap: 0.08, vol: 0.26 },
+    sfx_wall:     { gap: 0.06, vol: 0.25 },
+    sfx_axe:      { gap: 0.05, vol: 0.28 },
+    sfx_axe_hit:  { gap: 0.04, vol: 0.29 },
+    sfx_reel:     { gap: 0.20, vol: 0.32 },
+    sfx_crystal:  { gap: 0.05, vol: 0.28 },
+    sfx_cairn:    { gap: 0.20, vol: 0.33 },
+    sfx_crack:    { gap: 0.10, vol: 0.26 },
+    sfx_rumble:   { gap: 0.18, vol: 0.32 },
+    sfx_shatter:  { gap: 0.05, vol: 0.23 },
+    sfx_brittle:  { gap: 0.08, vol: 0.22 },
+    sfx_serac:    { gap: 0.35, vol: 0.29 },
+    sfx_hurt:     { gap: 0.15, vol: 0.29 },
+    sfx_death:    { gap: 0.50, vol: 0.33 },
+    sfx_summit:   { gap: 1.00, vol: 0.37 },
+    sfx_gust:     { gap: 0.40, vol: 0.26 },
+    sfx_ui:       { gap: 0.04, vol: 0.28 },
+    sfx_ui_hi:    { gap: 0.04, vol: 0.27 },
+    sfx_thunder:  { gap: 0.80, vol: 0.28 }
   };
 
-  var BEDS = { amb_wind: 0.5, amb_storm: 0.75 };
+  var BEDS = { amb_wind: 0.5, amb_storm: 0.62 };
+
+  // Nothing here can mix, so the next best thing: when several effects go off
+  // at once, each one steps back. A serac cracking during a landing during a
+  // gust is three files at full level on top of each other, and that stack -
+  // not any one sound - is what "too loud" actually sounds like.
+  var stack = 0;
 
   Aud.load = function () {
     muted = U.load(C.K_MUTE, '0') === '1';
-    sfxVol = U.loadNum(C.K_SFX, 0.75);
+    sfxVol = U.loadNum(C.K_SFX, 0.62);
 
     for (var name in SFX) {
       if (!SFX.hasOwnProperty(name)) continue;
@@ -100,6 +113,7 @@
 
   Aud.tick = function (dt) {
     now += dt;
+    stack = Math.max(0, stack - dt * 7);
     for (var b in beds) {
       if (!beds.hasOwnProperty(b)) continue;
       var bd = beds[b];
@@ -125,7 +139,9 @@
     e.i = (e.i + 1) % e.pool.length;
     try {
       a.currentTime = 0;
-      a.volume = U.clamp01(e.vol * (opts.volume === undefined ? 1 : opts.volume) * sfxVol);
+      var duck = 1 / (1 + stack * 0.5);
+      stack += 1;
+      a.volume = U.clamp01(e.vol * (opts.volume === undefined ? 1 : opts.volume) * sfxVol * duck);
       a.playbackRate = opts.rate === undefined ? 1 : U.clamp(opts.rate, 0.5, 3);
       var p = a.play();
       if (p && p.catch) p.catch(function () {});

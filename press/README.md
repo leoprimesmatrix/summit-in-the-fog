@@ -12,7 +12,7 @@ still reads small before publishing.
 
 ## Screenshots
 
-Six 1993x1121 captures for the page gallery, one per zone plus the title:
+Six 1600x900 captures for the page gallery, one per zone plus the title:
 
 | File | What it shows |
 |---|---|
